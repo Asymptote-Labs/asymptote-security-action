@@ -1,0 +1,43 @@
+name: 'Asymptote Security Scan'
+description: 'Evaluate PR code changes against Asymptote security policies'
+author: 'Asymptote Labs'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  asymptote_api_key:
+    description: 'Asymptote API key with evaluate_diff scope'
+    required: true
+  asymptote_api_url:
+    description: 'Asymptote Edge API URL'
+    required: false
+    default: 'https://asymptote-edge-579124726252.us-west1.run.app'
+  fail_on:
+    description: 'Minimum severity level to fail the check (critical, high, medium, low)'
+    required: false
+    default: 'high'
+  comment_on:
+    description: 'Minimum severity level to post PR comments (critical, high, medium, low)'
+    required: false
+    default: 'high'
+  exclude_paths:
+    description: 'Comma-separated glob patterns to exclude from scanning (e.g., "dist/**,*.min.js")'
+    required: false
+    default: ''
+
+outputs:
+  decision:
+    description: 'Evaluation decision (allow, warn, block)'
+  total_violations:
+    description: 'Total number of violations found'
+  critical_count:
+    description: 'Number of critical severity violations'
+  high_count:
+    description: 'Number of high severity violations'
+  medium_count:
+    description: 'Number of medium severity violations'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'

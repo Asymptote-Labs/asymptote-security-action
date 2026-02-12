@@ -1,0 +1,3 @@
+# Mark bundled output as generated so it's hidden in PR diffs
+dist/** linguist-generated
+dist/index.js linguist-generated

@@ -1,0 +1,27 @@
+{
+  "name": "asymptote-security-scan",
+  "version": "1.0.0",
+  "description": "GitHub Action to evaluate PR code changes against Asymptote security policies",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && ncc build src/index.ts -o dist --license licenses.txt",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "github-action",
+    "security",
+    "code-review",
+    "asymptote"
+  ],
+  "author": "Asymptote Labs",
+  "license": "MIT",
+  "dependencies": {
+    "@actions/core": "^2.0.3",
+    "@actions/github": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@vercel/ncc": "^0.38.1",
+    "typescript": "^5.3.3"
+  }
+}

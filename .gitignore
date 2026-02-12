@@ -1,0 +1,9 @@
+# Ignore intermediate TypeScript output (only dist/index.js is needed)
+lib/
+
+# Dependencies
+node_modules/
+
+# Keep dist/index.js but ignore everything else in dist
+dist/*
+!dist/index.js
