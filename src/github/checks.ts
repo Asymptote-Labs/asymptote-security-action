@@ -67,6 +67,24 @@ export async function createCheckRun(
       },
     });
 
+    // Set details_url to the check run's own page so "View details" links work
+    // on inline annotations in the PR diff view. We need the check run ID first,
+    // so this must be done as an update after creation.
+    if (checkRun.data.html_url) {
+      try {
+        await octokit.rest.checks.update({
+          owner,
+          repo,
+          check_run_id: checkRun.data.id,
+          details_url: checkRun.data.html_url,
+        });
+      } catch (e) {
+        core.warning(
+          `Failed to set details_url: ${e instanceof Error ? e.message : String(e)}`
+        );
+      }
+    }
+
     // If we have more annotations, update the check run in batches
     if (annotations.length > MAX_ANNOTATIONS_PER_REQUEST) {
       await addRemainingAnnotations(
@@ -246,12 +264,6 @@ function buildSummaryText(
       );
     }
   }
-
-  lines.push('');
-  lines.push('---');
-  lines.push(
-    '*Powered by [Asymptote Security](https://asymptotelabs.ai)*'
-  );
 
   return lines.join('\n');
 }
