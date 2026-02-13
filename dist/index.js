@@ -31706,20 +31706,25 @@ async function createCheckRun(octokit, result, commitSha, failOnThreshold) {
                 annotations: annotations.slice(0, MAX_ANNOTATIONS_PER_REQUEST),
             },
         });
-        // Set details_url to the check run's own page so "View details" links work
-        // on inline annotations in the PR diff view. We need the check run ID first,
-        // so this must be done as an update after creation.
-        if (checkRun.data.html_url) {
+        // If we have more annotations, update the check run in batches
+        if (annotations.length > MAX_ANNOTATIONS_PER_REQUEST) {
+            await addRemainingAnnotations(octokit, checkRun.data.id, annotations.slice(MAX_ANNOTATIONS_PER_REQUEST));
+        }
+        // Set details_url to the Actions run page so "View details" links to workflow execution.
+        // This is non-critical, so wrap in try-catch to prevent blocking annotation batching.
+        try {
+            const runId = github.context.runId;
+            const serverUrl = process.env.GITHUB_SERVER_URL || 'https://github.com';
+            const detailsUrl = `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`;
             await octokit.rest.checks.update({
                 owner,
                 repo,
                 check_run_id: checkRun.data.id,
-                details_url: checkRun.data.html_url,
+                details_url: detailsUrl,
             });
         }
-        // If we have more annotations, update the check run in batches
-        if (annotations.length > MAX_ANNOTATIONS_PER_REQUEST) {
-            await addRemainingAnnotations(octokit, checkRun.data.id, annotations.slice(MAX_ANNOTATIONS_PER_REQUEST));
+        catch (error) {
+            core.debug(`Failed to set details_url: ${error instanceof Error ? error.message : String(error)}`);
         }
         core.info(`Check run created: ${checkRun.data.html_url}`);
     }
