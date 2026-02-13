@@ -46,6 +46,13 @@ export async function createCheckRun(
   // Build summary text
   const summaryText = buildSummaryText(violations, decision, failOnThreshold);
 
+  // Build the details URL pointing to the GitHub Actions run
+  const serverUrl = process.env.GITHUB_SERVER_URL || 'https://github.com';
+  const runId = process.env.GITHUB_RUN_ID;
+  const detailsUrl = runId
+    ? `${serverUrl}/${owner}/${repo}/actions/runs/${runId}`
+    : undefined;
+
   core.info(
     `Creating check run with ${annotations.length} annotations (conclusion: ${conclusion})`
   );
@@ -59,6 +66,7 @@ export async function createCheckRun(
       head_sha: commitSha,
       status: 'completed',
       conclusion,
+      details_url: detailsUrl,
       output: {
         title: getCheckTitle(violations),
         summary: summaryText,
