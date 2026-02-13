@@ -259,11 +259,5 @@ function buildSummaryText(
     }
   }
 
-  lines.push('');
-  lines.push('---');
-  lines.push(
-    '*Powered by [Asymptote Security](https://asymptotelabs.ai)*'
-  );
-
   return lines.join('\n');
 }

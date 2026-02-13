@@ -31858,9 +31858,6 @@ function buildSummaryText(violations, decision, failOnThreshold) {
             lines.push(`*...and ${violations.length - 10} more. See annotations for full details.*`);
         }
     }
-    lines.push('');
-    lines.push('---');
-    lines.push('*Powered by [Asymptote Security](https://asymptotelabs.ai)*');
     return lines.join('\n');
 }
 
