@@ -219,6 +219,14 @@ function formatViolationComment(violation: Violation): string {
     lines.push('');
   }
 
+  // Dashboard link
+  if (violation.id) {
+    lines.push(
+      `[View in Asymptote Dashboard](https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id})`
+    );
+    lines.push('');
+  }
+
   // Cursor deeplink button
   lines.push(buildCursorDeeplinkHtml(violation));
 
@@ -231,4 +239,99 @@ function formatViolationComment(violation: Violation): string {
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Resolve outdated Asymptote review threads on a PR.
+ * GitHub marks threads as "outdated" when the referenced lines change.
+ * Resolving them triggers the pull_request_review_thread webhook which
+ * the backend uses to mark violations as remediated.
+ */
+export async function resolveOutdatedThreads(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  prNumber: number
+): Promise<void> {
+  const query = `
+    query($owner: String!, $repo: String!, $prNumber: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $prNumber) {
+          reviewThreads(first: 100) {
+            nodes {
+              id
+              isResolved
+              isOutdated
+              comments(first: 1) {
+                nodes {
+                  author { login }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  interface ReviewThread {
+    id: string;
+    isResolved: boolean;
+    isOutdated: boolean;
+    comments: {
+      nodes: Array<{
+        author: { login: string } | null;
+      }>;
+    };
+  }
+
+  const result = await octokit.graphql<{
+    repository: {
+      pullRequest: {
+        reviewThreads: {
+          nodes: ReviewThread[];
+        };
+      };
+    };
+  }>(query, { owner, repo, prNumber });
+
+  const threads =
+    result.repository.pullRequest.reviewThreads.nodes;
+
+  const outdatedThreads = threads.filter(
+    (t: ReviewThread) =>
+      t.isOutdated &&
+      !t.isResolved &&
+      t.comments.nodes[0]?.author?.login === 'asymptote-security[bot]'
+  );
+
+  if (outdatedThreads.length === 0) {
+    core.info('No outdated Asymptote threads to resolve');
+    return;
+  }
+
+  core.info(
+    `Resolving ${outdatedThreads.length} outdated Asymptote thread(s)`
+  );
+
+  for (const thread of outdatedThreads) {
+    try {
+      await octokit.graphql(
+        `mutation($threadId: ID!) {
+          resolveReviewThread(input: { threadId: $threadId }) {
+            thread { id }
+          }
+        }`,
+        { threadId: thread.id }
+      );
+    } catch (error) {
+      core.warning(
+        `Failed to resolve thread ${thread.id}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
+  core.info(
+    `Resolved ${outdatedThreads.length} outdated thread(s)`
+  );
 }

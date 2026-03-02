@@ -31909,6 +31909,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.postViolationComments = postViolationComments;
+exports.resolveOutdatedThreads = resolveOutdatedThreads;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const severity_1 = __nccwpck_require__(5278);
@@ -32079,6 +32080,11 @@ function formatViolationComment(violation) {
         lines.push(`**Reference:** [CWE-${cweNumber}](https://cwe.mitre.org/data/definitions/${cweNumber}.html)`);
         lines.push('');
     }
+    // Dashboard link
+    if (violation.id) {
+        lines.push(`[View in Asymptote Dashboard](https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id})`);
+        lines.push('');
+    }
     // Cursor deeplink button
     lines.push(buildCursorDeeplinkHtml(violation));
     // Embed violation ID for webhook handler to link comment back to violation
@@ -32087,6 +32093,57 @@ function formatViolationComment(violation) {
         lines.push(`<!-- asymptote:violation_id=${violation.id} -->`);
     }
     return lines.join('\n');
+}
+/**
+ * Resolve outdated Asymptote review threads on a PR.
+ * GitHub marks threads as "outdated" when the referenced lines change.
+ * Resolving them triggers the pull_request_review_thread webhook which
+ * the backend uses to mark violations as remediated.
+ */
+async function resolveOutdatedThreads(octokit, owner, repo, prNumber) {
+    const query = `
+    query($owner: String!, $repo: String!, $prNumber: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $prNumber) {
+          reviewThreads(first: 100) {
+            nodes {
+              id
+              isResolved
+              isOutdated
+              comments(first: 1) {
+                nodes {
+                  author { login }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+    const result = await octokit.graphql(query, { owner, repo, prNumber });
+    const threads = result.repository.pullRequest.reviewThreads.nodes;
+    const outdatedThreads = threads.filter((t) => t.isOutdated &&
+        !t.isResolved &&
+        t.comments.nodes[0]?.author?.login === 'asymptote-security[bot]');
+    if (outdatedThreads.length === 0) {
+        core.info('No outdated Asymptote threads to resolve');
+        return;
+    }
+    core.info(`Resolving ${outdatedThreads.length} outdated Asymptote thread(s)`);
+    for (const thread of outdatedThreads) {
+        try {
+            await octokit.graphql(`mutation($threadId: ID!) {
+          resolveReviewThread(input: { threadId: $threadId }) {
+            thread { id }
+          }
+        }`, { threadId: thread.id });
+        }
+        catch (error) {
+            core.warning(`Failed to resolve thread ${thread.id}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+    core.info(`Resolved ${outdatedThreads.length} outdated thread(s)`);
 }
 
 
@@ -32132,6 +32189,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getPRDiff = getPRDiff;
+exports.getIncrementalDiff = getIncrementalDiff;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const glob_1 = __nccwpck_require__(339);
@@ -32185,6 +32243,56 @@ async function getPRDiff(octokit, excludePaths = []) {
         files,
         prNumber,
         commitSha,
+        baseSha,
+    };
+}
+async function getIncrementalDiff(octokit, beforeSha, afterSha, excludePaths = []) {
+    const { owner, repo } = github.context.repo;
+    const prNumber = github.context.payload.pull_request?.number;
+    if (!prNumber) {
+        throw new Error('Could not determine PR number from context');
+    }
+    const baseSha = github.context.payload.pull_request?.base?.sha;
+    if (!baseSha) {
+        throw new Error('Could not determine base SHA from PR context');
+    }
+    core.debug(`Fetching incremental diff (${beforeSha}...${afterSha})`);
+    // Fetch the diff between the two commits
+    const compareResponse = await octokit.rest.repos.compareCommitsWithBasehead({
+        owner,
+        repo,
+        basehead: `${beforeSha}...${afterSha}`,
+        mediaType: {
+            format: 'diff',
+        },
+    });
+    let diff = compareResponse.data;
+    // Fetch comparison again for file metadata (JSON format)
+    const filesResponse = await octokit.rest.repos.compareCommitsWithBasehead({
+        owner,
+        repo,
+        basehead: `${beforeSha}...${afterSha}`,
+    });
+    let files = (filesResponse.data.files || []).map((file) => ({
+        path: file.filename,
+        language: getLanguageFromFilename(file.filename),
+    }));
+    // Filter out excluded paths
+    if (excludePaths.length > 0) {
+        const originalFileCount = files.length;
+        files = files.filter((f) => !(0, glob_1.matchesAnyPattern)(f.path, excludePaths));
+        diff = (0, glob_1.filterDiff)(diff, excludePaths);
+        const excludedCount = originalFileCount - files.length;
+        if (excludedCount > 0) {
+            core.info(`Excluded ${excludedCount} files matching exclude patterns`);
+        }
+    }
+    core.info(`Fetched incremental diff with ${files.length} files to scan`);
+    return {
+        diff,
+        files,
+        prNumber,
+        commitSha: afterSha,
         baseSha,
     };
 }
@@ -32293,12 +32401,22 @@ async function run() {
             return;
         }
         const octokit = github.getOctokit(githubToken);
-        // 4. Get PR diff
+        // 4. Get PR diff (incremental on synchronize, full otherwise)
+        const action = github.context.payload.action;
+        const before = github.context.payload.before;
         core.info('Fetching PR diff...');
         if (config.excludePaths.length > 0) {
             core.info(`Excluding paths: ${config.excludePaths.join(', ')}`);
         }
-        const diffResult = await (0, diff_1.getPRDiff)(octokit, config.excludePaths);
+        let diffResult;
+        const commitSha = github.context.payload.pull_request?.head?.sha;
+        if (action === 'synchronize' && before && commitSha) {
+            core.info(`Incremental diff: ${before}...${commitSha}`);
+            diffResult = await (0, diff_1.getIncrementalDiff)(octokit, before, commitSha, config.excludePaths);
+        }
+        else {
+            diffResult = await (0, diff_1.getPRDiff)(octokit, config.excludePaths);
+        }
         if (!diffResult.diff || diffResult.diff.trim().length === 0) {
             core.info('No changes detected in PR, skipping evaluation');
             core.setOutput('decision', 'allow');
@@ -32373,7 +32491,15 @@ async function run() {
                 }
             }
         }
-        // 6. Post review comments
+        // 6. Auto-resolve outdated Asymptote threads on synchronize
+        if (action === 'synchronize') {
+            const { owner, repo } = github.context.repo;
+            const prNumber = github.context.payload.pull_request?.number;
+            if (prNumber) {
+                await (0, comments_1.resolveOutdatedThreads)(octokit, owner, repo, prNumber);
+            }
+        }
+        // 7. Post review comments
         await (0, comments_1.postViolationComments)(octokit, violations, diffResult.commitSha, config.commentOn);
         // 7. Create check run with annotations
         await (0, checks_1.createCheckRun)(octokit, result, diffResult.commitSha, config.failOn);

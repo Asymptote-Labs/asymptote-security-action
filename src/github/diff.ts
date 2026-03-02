@@ -82,6 +82,77 @@ export async function getPRDiff(
   };
 }
 
+export async function getIncrementalDiff(
+  octokit: Octokit,
+  beforeSha: string,
+  afterSha: string,
+  excludePaths: string[] = []
+): Promise<PRDiffResult> {
+  const { owner, repo } = github.context.repo;
+  const prNumber = github.context.payload.pull_request?.number;
+
+  if (!prNumber) {
+    throw new Error('Could not determine PR number from context');
+  }
+
+  const baseSha = github.context.payload.pull_request?.base?.sha;
+  if (!baseSha) {
+    throw new Error('Could not determine base SHA from PR context');
+  }
+
+  core.debug(`Fetching incremental diff (${beforeSha}...${afterSha})`);
+
+  // Fetch the diff between the two commits
+  const compareResponse = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner,
+    repo,
+    basehead: `${beforeSha}...${afterSha}`,
+    mediaType: {
+      format: 'diff',
+    },
+  });
+
+  let diff = compareResponse.data as unknown as string;
+
+  // Fetch comparison again for file metadata (JSON format)
+  const filesResponse = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner,
+    repo,
+    basehead: `${beforeSha}...${afterSha}`,
+  });
+
+  let files: FileInfo[] = (filesResponse.data.files || []).map(
+    (file: { filename: string }) => ({
+      path: file.filename,
+      language: getLanguageFromFilename(file.filename),
+    })
+  );
+
+  // Filter out excluded paths
+  if (excludePaths.length > 0) {
+    const originalFileCount = files.length;
+    files = files.filter((f) => !matchesAnyPattern(f.path, excludePaths));
+    diff = filterDiff(diff, excludePaths);
+
+    const excludedCount = originalFileCount - files.length;
+    if (excludedCount > 0) {
+      core.info(`Excluded ${excludedCount} files matching exclude patterns`);
+    }
+  }
+
+  core.info(
+    `Fetched incremental diff with ${files.length} files to scan`
+  );
+
+  return {
+    diff,
+    files,
+    prNumber,
+    commitSha: afterSha,
+    baseSha,
+  };
+}
+
 function getLanguageFromFilename(filename: string): string | undefined {
   const ext = filename.split('.').pop()?.toLowerCase();
   const languageMap: Record<string, string> = {
