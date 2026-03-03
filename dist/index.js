@@ -32043,8 +32043,8 @@ function buildCursorDeeplinkHtml(violation) {
  */
 function formatViolationComment(violation) {
     const lines = [];
-    // Header with severity badge
-    lines.push(`### ${(0, severity_1.getSeverityBadge)(violation.severity)} Asymptote Security Scan`);
+    // Header with logo and severity badge
+    lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> ${(0, severity_1.getSeverityBadge)(violation.severity)} Asymptote Security Scan`);
     lines.push('');
     // Policy info
     lines.push(`**Policy:** ${violation.policy_name}`);

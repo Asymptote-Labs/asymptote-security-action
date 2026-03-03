@@ -173,8 +173,8 @@ function buildCursorDeeplinkHtml(violation: Violation): string {
 function formatViolationComment(violation: Violation): string {
   const lines: string[] = [];
 
-  // Header with severity badge
-  lines.push(`### ${getSeverityBadge(violation.severity)} Asymptote Security Scan`);
+  // Header with logo and severity badge
+  lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> ${getSeverityBadge(violation.severity)} Asymptote Security Scan`);
   lines.push('');
 
   // Policy info
