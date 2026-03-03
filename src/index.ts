@@ -5,7 +5,7 @@ import { AsymptoteClient, RateLimitError, TimeoutError } from './api/client';
 import { getPRDiff, getIncrementalDiff } from './github/diff';
 import { postViolationComments, resolveOutdatedThreads } from './github/comments';
 import { createCheckRun } from './github/checks';
-import { shouldFail, countBySeverity, filterByThreshold } from './utils/severity';
+import { countBySeverity } from './utils/severity';
 
 async function run(): Promise<void> {
   try {
@@ -15,8 +15,6 @@ async function run(): Promise<void> {
 
     core.info('Asymptote Security Scan starting...');
     core.debug(`API URL: ${config.apiUrl}`);
-    core.debug(`Fail on: ${config.failOn}`);
-    core.debug(`Comment on: ${config.commentOn}`);
 
     // 2. Verify PR context
     if (github.context.eventName !== 'pull_request') {
@@ -90,6 +88,28 @@ async function run(): Promise<void> {
       `PR #${diffResult.prNumber}: ${diffResult.files.length} files changed`
     );
 
+    // 4b. Get PR author email from webhook payload
+    const prAuthorLogin =
+      github.context.payload.pull_request?.user?.login as string | undefined;
+    core.info(`PR author login: ${prAuthorLogin || '(not found)'}`);
+    let prAuthorEmail: string | undefined;
+    if (prAuthorLogin) {
+      try {
+        const user = await octokit.rest.users.getByUsername({
+          username: prAuthorLogin,
+        });
+        prAuthorEmail = user.data.email || prAuthorLogin;
+      } catch {
+        prAuthorEmail = prAuthorLogin;
+      }
+    }
+    core.info(`PR author resolved to: ${prAuthorEmail || '(not resolved)'}`);
+
+    if (!prAuthorEmail) {
+      prAuthorEmail = github.context.actor;
+      core.info(`Using github.context.actor as fallback: ${prAuthorEmail}`);
+    }
+
     // 5. Call Asymptote API
     core.info('Submitting diff for evaluation...');
     const client = new AsymptoteClient({
@@ -111,6 +131,7 @@ async function run(): Promise<void> {
           tool: 'github-action',
           pr_number: diffResult.prNumber,
           commit_sha: diffResult.commitSha,
+          pr_author: prAuthorEmail,
         },
       });
     } catch (error) {
@@ -141,9 +162,8 @@ async function run(): Promise<void> {
       `Evaluation complete: ${decision} (${violations.length} violations)`
     );
 
-    // 5b. Generate suggested fixes for high/critical violations
-    const commentableViolations = filterByThreshold(violations, config.commentOn);
-    if (commentableViolations.length > 0) {
+    // 5b. Generate suggested fixes for violations
+    if (violations.length > 0) {
       core.info('Generating suggested fixes...');
       const fixes = await client.getSuggestedFixes(
         result.evaluation_id,
@@ -168,21 +188,11 @@ async function run(): Promise<void> {
       }
     }
 
-    // 7. Post review comments
-    await postViolationComments(
-      octokit,
-      violations,
-      diffResult.commitSha,
-      config.commentOn
-    );
+    // 6. Post review comments
+    await postViolationComments(octokit, violations, diffResult.commitSha);
 
     // 7. Create check run with annotations
-    await createCheckRun(
-      octokit,
-      result,
-      diffResult.commitSha,
-      config.failOn
-    );
+    await createCheckRun(octokit, result, diffResult.commitSha);
 
     // 8. Set outputs
     core.setOutput('decision', decision);
@@ -191,11 +201,10 @@ async function run(): Promise<void> {
     core.setOutput('high_count', counts.high);
     core.setOutput('medium_count', counts.medium);
 
-    // 9. Fail if threshold exceeded
-    if (shouldFail(violations, config.failOn)) {
-      const failingViolations = filterByThreshold(violations, config.failOn);
+    // 9. Fail if any violations exist
+    if (violations.length > 0) {
       core.setFailed(
-        `Security check failed: ${failingViolations.length} violation(s) at or above ${config.failOn} severity`
+        `Security check failed: ${violations.length} violation(s) found`
       );
     } else {
       core.info('Security check passed');
