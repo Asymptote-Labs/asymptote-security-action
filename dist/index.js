@@ -32044,7 +32044,7 @@ function buildCursorDeeplinkHtml(violation) {
 function formatViolationComment(violation) {
     const lines = [];
     // Header with severity badge
-    lines.push(`### ${(0, severity_1.getSeverityBadge)(violation.severity)} Security Issue`);
+    lines.push(`### ${(0, severity_1.getSeverityBadge)(violation.severity)} Asymptote Security Scan`);
     lines.push('');
     // Policy info
     lines.push(`**Policy:** ${violation.policy_name}`);

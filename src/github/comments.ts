@@ -174,7 +174,7 @@ function formatViolationComment(violation: Violation): string {
   const lines: string[] = [];
 
   // Header with severity badge
-  lines.push(`### ${getSeverityBadge(violation.severity)} Security Issue`);
+  lines.push(`### ${getSeverityBadge(violation.severity)} Asymptote Security Scan`);
   lines.push('');
 
   // Policy info
