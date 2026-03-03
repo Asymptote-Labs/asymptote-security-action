@@ -32485,12 +32485,16 @@ async function run() {
         const prAuthorLogin = github.context.payload.pull_request?.user?.login;
         core.info(`PR author login: ${prAuthorLogin || '(not found)'}`);
         let prAuthorEmail;
-        if (prAuthorLogin) {
+        if (prAuthorLogin && diffResult.prNumber) {
             try {
-                const user = await octokit.rest.users.getByUsername({
-                    username: prAuthorLogin,
+                const commits = await octokit.rest.pulls.listCommits({
+                    owner: github.context.repo.owner,
+                    repo: github.context.repo.repo,
+                    pull_number: diffResult.prNumber,
+                    per_page: 1,
                 });
-                prAuthorEmail = user.data.email || prAuthorLogin;
+                const commitEmail = commits.data[0]?.commit?.author?.email;
+                prAuthorEmail = commitEmail || prAuthorLogin;
             }
             catch {
                 prAuthorEmail = prAuthorLogin;
