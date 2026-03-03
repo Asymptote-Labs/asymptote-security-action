@@ -32135,6 +32135,7 @@ async function resolveOutdatedThreads(octokit, owner, repo, prNumber) {
         return;
     }
     core.info(`Resolving ${outdatedThreads.length} outdated Asymptote thread(s)`);
+    let resolved = 0;
     for (const thread of outdatedThreads) {
         try {
             await octokit.graphql(`mutation($threadId: ID!) {
@@ -32142,12 +32143,13 @@ async function resolveOutdatedThreads(octokit, owner, repo, prNumber) {
             thread { id }
           }
         }`, { threadId: thread.id });
+            resolved++;
         }
         catch (error) {
             core.warning(`Failed to resolve thread ${thread.id}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
-    core.info(`Resolved ${outdatedThreads.length} outdated thread(s)`);
+    core.info(`Resolved ${resolved}/${outdatedThreads.length} outdated thread(s)`);
 }
 
 
