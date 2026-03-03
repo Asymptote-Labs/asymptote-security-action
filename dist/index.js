@@ -32429,7 +32429,12 @@ async function run() {
             const { owner, repo } = github.context.repo;
             const prNumber = github.context.payload.pull_request?.number;
             if (prNumber) {
-                await (0, comments_1.resolveOutdatedThreads)(octokit, owner, repo, prNumber);
+                try {
+                    await (0, comments_1.resolveOutdatedThreads)(octokit, owner, repo, prNumber);
+                }
+                catch (error) {
+                    core.warning(`Failed to resolve outdated threads: ${error instanceof Error ? error.message : String(error)}`);
+                }
             }
         }
         if (!diffResult.diff || diffResult.diff.trim().length === 0) {

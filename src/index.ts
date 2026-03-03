@@ -66,7 +66,13 @@ async function run(): Promise<void> {
       const { owner, repo } = github.context.repo;
       const prNumber = github.context.payload.pull_request?.number;
       if (prNumber) {
-        await resolveOutdatedThreads(octokit, owner, repo, prNumber);
+        try {
+          await resolveOutdatedThreads(octokit, owner, repo, prNumber);
+        } catch (error) {
+          core.warning(
+            `Failed to resolve outdated threads: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
       }
     }
 
