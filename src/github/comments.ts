@@ -174,7 +174,7 @@ function formatViolationComment(violation: Violation): string {
   const lines: string[] = [];
 
   // Header with logo and severity badge
-  lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> ${getSeverityBadge(violation.severity)} Security Issue — Asymptote Security Scan`);
+  lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> Asymptote Security Scan — ${getSeverityBadge(violation.severity)} Security Issue`);
   lines.push('');
 
   // Policy info
