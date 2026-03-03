@@ -32417,6 +32417,15 @@ async function run() {
         else {
             diffResult = await (0, diff_1.getPRDiff)(octokit, config.excludePaths);
         }
+        // Auto-resolve outdated Asymptote threads on synchronize (before empty-diff
+        // check so threads are resolved even when the incremental diff is empty)
+        if (action === 'synchronize') {
+            const { owner, repo } = github.context.repo;
+            const prNumber = github.context.payload.pull_request?.number;
+            if (prNumber) {
+                await (0, comments_1.resolveOutdatedThreads)(octokit, owner, repo, prNumber);
+            }
+        }
         if (!diffResult.diff || diffResult.diff.trim().length === 0) {
             core.info('No changes detected in PR, skipping evaluation');
             core.setOutput('decision', 'allow');
@@ -32489,14 +32498,6 @@ async function run() {
                         };
                     }
                 }
-            }
-        }
-        // 6. Auto-resolve outdated Asymptote threads on synchronize
-        if (action === 'synchronize') {
-            const { owner, repo } = github.context.repo;
-            const prNumber = github.context.payload.pull_request?.number;
-            if (prNumber) {
-                await (0, comments_1.resolveOutdatedThreads)(octokit, owner, repo, prNumber);
             }
         }
         // 7. Post review comments

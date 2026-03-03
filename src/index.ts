@@ -60,6 +60,16 @@ async function run(): Promise<void> {
       diffResult = await getPRDiff(octokit, config.excludePaths);
     }
 
+    // Auto-resolve outdated Asymptote threads on synchronize (before empty-diff
+    // check so threads are resolved even when the incremental diff is empty)
+    if (action === 'synchronize') {
+      const { owner, repo } = github.context.repo;
+      const prNumber = github.context.payload.pull_request?.number;
+      if (prNumber) {
+        await resolveOutdatedThreads(octokit, owner, repo, prNumber);
+      }
+    }
+
     if (!diffResult.diff || diffResult.diff.trim().length === 0) {
       core.info('No changes detected in PR, skipping evaluation');
       core.setOutput('decision', 'allow');
@@ -149,15 +159,6 @@ async function run(): Promise<void> {
             };
           }
         }
-      }
-    }
-
-    // 6. Auto-resolve outdated Asymptote threads on synchronize
-    if (action === 'synchronize') {
-      const { owner, repo } = github.context.repo;
-      const prNumber = github.context.payload.pull_request?.number;
-      if (prNumber) {
-        await resolveOutdatedThreads(octokit, owner, repo, prNumber);
       }
     }
 
