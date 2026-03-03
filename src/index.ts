@@ -2,8 +2,8 @@ import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { getConfig } from './config';
 import { AsymptoteClient, RateLimitError, TimeoutError } from './api/client';
-import { getPRDiff } from './github/diff';
-import { postViolationComments } from './github/comments';
+import { getPRDiff, getIncrementalDiff } from './github/diff';
+import { postViolationComments, resolveOutdatedThreads } from './github/comments';
 import { createCheckRun } from './github/checks';
 import { shouldFail, countBySeverity, filterByThreshold } from './utils/severity';
 
@@ -36,12 +36,45 @@ async function run(): Promise<void> {
     }
     const octokit = github.getOctokit(githubToken);
 
-    // 4. Get PR diff
+    // 4. Get PR diff (incremental on synchronize, full otherwise)
+    const action = github.context.payload.action;
+    const before = github.context.payload.before;
+
     core.info('Fetching PR diff...');
     if (config.excludePaths.length > 0) {
       core.info(`Excluding paths: ${config.excludePaths.join(', ')}`);
     }
-    const diffResult = await getPRDiff(octokit, config.excludePaths);
+
+    let diffResult;
+    const commitSha = github.context.payload.pull_request?.head?.sha;
+
+    if (action === 'synchronize' && before && commitSha) {
+      core.info(`Incremental diff: ${before}...${commitSha}`);
+      diffResult = await getIncrementalDiff(
+        octokit,
+        before,
+        commitSha,
+        config.excludePaths
+      );
+    } else {
+      diffResult = await getPRDiff(octokit, config.excludePaths);
+    }
+
+    // Auto-resolve outdated Asymptote threads on synchronize (before empty-diff
+    // check so threads are resolved even when the incremental diff is empty)
+    if (action === 'synchronize') {
+      const { owner, repo } = github.context.repo;
+      const prNumber = github.context.payload.pull_request?.number;
+      if (prNumber) {
+        try {
+          await resolveOutdatedThreads(octokit, owner, repo, prNumber);
+        } catch (error) {
+          core.warning(
+            `Failed to resolve outdated threads: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      }
+    }
 
     if (!diffResult.diff || diffResult.diff.trim().length === 0) {
       core.info('No changes detected in PR, skipping evaluation');
@@ -135,7 +168,7 @@ async function run(): Promise<void> {
       }
     }
 
-    // 6. Post review comments
+    // 7. Post review comments
     await postViolationComments(
       octokit,
       violations,
