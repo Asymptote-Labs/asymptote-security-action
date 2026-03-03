@@ -32112,7 +32112,7 @@ async function resolveOutdatedThreads(octokit, owner, repo, prNumber) {
               isOutdated
               comments(first: 1) {
                 nodes {
-                  author { login }
+                  body
                 }
               }
             }
@@ -32123,9 +32123,13 @@ async function resolveOutdatedThreads(octokit, owner, repo, prNumber) {
   `;
     const result = await octokit.graphql(query, { owner, repo, prNumber });
     const threads = result.repository.pullRequest.reviewThreads.nodes;
+    // Identify Asymptote threads by the violation_id marker embedded in comment
+    // body, which works regardless of auth method (github-actions[bot] or
+    // asymptote-security[bot])
+    const ASYMPTOTE_MARKER = /<!-- asymptote:violation_id=/;
     const outdatedThreads = threads.filter((t) => t.isOutdated &&
         !t.isResolved &&
-        t.comments.nodes[0]?.author?.login === 'asymptote-security[bot]');
+        ASYMPTOTE_MARKER.test(t.comments.nodes[0]?.body ?? ''));
     if (outdatedThreads.length === 0) {
         core.info('No outdated Asymptote threads to resolve');
         return;

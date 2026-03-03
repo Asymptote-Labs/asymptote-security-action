@@ -264,7 +264,7 @@ export async function resolveOutdatedThreads(
               isOutdated
               comments(first: 1) {
                 nodes {
-                  author { login }
+                  body
                 }
               }
             }
@@ -280,7 +280,7 @@ export async function resolveOutdatedThreads(
     isOutdated: boolean;
     comments: {
       nodes: Array<{
-        author: { login: string } | null;
+        body: string;
       }>;
     };
   }
@@ -298,11 +298,16 @@ export async function resolveOutdatedThreads(
   const threads =
     result.repository.pullRequest.reviewThreads.nodes;
 
+  // Identify Asymptote threads by the violation_id marker embedded in comment
+  // body, which works regardless of auth method (github-actions[bot] or
+  // asymptote-security[bot])
+  const ASYMPTOTE_MARKER = /<!-- asymptote:violation_id=/;
+
   const outdatedThreads = threads.filter(
     (t: ReviewThread) =>
       t.isOutdated &&
       !t.isResolved &&
-      t.comments.nodes[0]?.author?.login === 'asymptote-security[bot]'
+      ASYMPTOTE_MARKER.test(t.comments.nodes[0]?.body ?? '')
   );
 
   if (outdatedThreads.length === 0) {
