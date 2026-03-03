@@ -32484,23 +32484,48 @@ async function run() {
         // 4b. Get PR author email from webhook payload
         const prAuthorLogin = github.context.payload.pull_request?.user?.login;
         core.info(`PR author login: ${prAuthorLogin || '(not found)'}`);
-        let prAuthorEmail;
+        let prAuthor;
         if (prAuthorLogin) {
-            try {
-                const user = await octokit.rest.users.getByUsername({
-                    username: prAuthorLogin,
-                });
-                prAuthorEmail = user.data.email || prAuthorLogin;
-            }
-            catch {
-                prAuthorEmail = prAuthorLogin;
+            prAuthor = prAuthorLogin;
+            if (diffResult.prNumber) {
+                try {
+                    const commits = await octokit.rest.pulls.listCommits({
+                        owner: github.context.repo.owner,
+                        repo: github.context.repo.repo,
+                        pull_number: diffResult.prNumber,
+                        per_page: 100,
+                    });
+                    const emailCounts = new Map();
+                    for (const commit of commits.data) {
+                        const email = commit.commit?.author?.email;
+                        if (email) {
+                            emailCounts.set(email, (emailCounts.get(email) || 0) + 1);
+                        }
+                    }
+                    let topEmail;
+                    let topCount = 0;
+                    for (const [email, count] of emailCounts) {
+                        if (count > topCount) {
+                            topEmail = email;
+                            topCount = count;
+                        }
+                    }
+                    if (topEmail) {
+                        prAuthor = topEmail;
+                    }
+                }
+                catch {
+                    // prAuthor already set to prAuthorLogin above
+                }
             }
         }
-        core.info(`PR author resolved to: ${prAuthorEmail || '(not resolved)'}`);
-        if (!prAuthorEmail) {
-            prAuthorEmail = github.context.actor;
-            core.info(`Using github.context.actor as fallback: ${prAuthorEmail}`);
+        core.info(`PR author resolved to: ${prAuthor ? '(resolved, masked)' : '(not resolved)'}`);
+        if (!prAuthor) {
+            prAuthor = github.context.actor;
+            core.info('Using github.context.actor as fallback');
         }
+        // Mask the resolved author value so it is redacted from CI logs
+        core.setSecret(prAuthor);
         // 5. Call Asymptote API
         core.info('Submitting diff for evaluation...');
         const client = new client_1.AsymptoteClient({
@@ -32521,7 +32546,7 @@ async function run() {
                     tool: 'github-action',
                     pr_number: diffResult.prNumber,
                     commit_sha: diffResult.commitSha,
-                    pr_author: prAuthorEmail,
+                    pr_author: prAuthor,
                 },
             });
         }
