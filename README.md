@@ -24,7 +24,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   checks: write
 
@@ -129,10 +129,12 @@ This action requires the following GitHub token permissions:
 
 ```yaml
 permissions:
-  contents: read        # Read repository contents
-  pull-requests: write  # Post review comments
-  checks: write         # Create check runs with annotations
+  contents: write        # Read repo contents + resolve outdated review threads (GraphQL)
+  pull-requests: write   # Post review comments
+  checks: write          # Create check runs with annotations
 ```
+
+> **Note:** `contents: write` is required for the `resolveReviewThread` GraphQL mutation used to auto-resolve outdated violation threads. If you prefer `contents: read`, the action will still work but outdated threads won't be auto-resolved.
 
 ## API Key
 
