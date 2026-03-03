@@ -31599,7 +31599,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getConfig = getConfig;
 const core = __importStar(__nccwpck_require__(7484));
-const severity_1 = __nccwpck_require__(5278);
 /**
  * Parse and validate action inputs
  */
@@ -31610,20 +31609,14 @@ function getConfig() {
     }
     const apiUrl = core.getInput('asymptote_api_url') ||
         'https://asymptote-edge-579124726252.us-west1.run.app';
-    const failOnInput = core.getInput('fail_on') || 'high';
-    const commentOnInput = core.getInput('comment_on') || 'high';
     const excludePathsInput = core.getInput('exclude_paths') || '';
     const excludePaths = excludePathsInput
         .split(',')
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
-    const failOn = (0, severity_1.parseSeverity)(failOnInput);
-    const commentOn = (0, severity_1.parseSeverity)(commentOnInput);
     return {
         apiKey,
         apiUrl,
-        failOn,
-        commentOn,
         excludePaths,
     };
 }
@@ -31679,16 +31672,15 @@ const MAX_ANNOTATIONS_PER_REQUEST = 50;
 /**
  * Create a check run with annotations for the evaluation results
  */
-async function createCheckRun(octokit, result, commitSha, failOnThreshold) {
+async function createCheckRun(octokit, result, commitSha) {
     const { owner, repo } = github.context.repo;
     const violations = result.violations || [];
     const decision = result.decision || 'allow';
-    const shouldFailCheck = (0, severity_1.shouldFail)(violations, failOnThreshold);
-    const conclusion = shouldFailCheck ? 'failure' : 'success';
+    const conclusion = violations.length > 0 ? 'failure' : 'success';
     // Build annotations from violations
     const annotations = buildAnnotations(violations);
     // Build summary text
-    const summaryText = buildSummaryText(violations, decision, failOnThreshold);
+    const summaryText = buildSummaryText(violations, decision);
     core.info(`Creating check run with ${annotations.length} annotations (conclusion: ${conclusion})`);
     try {
         // Create the check run
@@ -31757,7 +31749,6 @@ async function addRemainingAnnotations(octokit, checkRunId, annotations) {
 function buildAnnotations(violations) {
     return violations
         .filter((v) => v.location.file && v.location.line_start > 0)
-        .filter((v) => v.severity !== 'low' && v.severity !== 'info')
         .map((violation) => ({
         path: violation.location.file,
         start_line: violation.location.line_start,
@@ -31823,7 +31814,7 @@ function getCheckTitle(violations) {
 /**
  * Build summary markdown text
  */
-function buildSummaryText(violations, decision, failOnThreshold) {
+function buildSummaryText(violations, decision) {
     const lines = [];
     // Decision badge
     const decisionBadges = {
@@ -31845,9 +31836,6 @@ function buildSummaryText(violations, decision, failOnThreshold) {
     lines.push(`| ${(0, severity_1.getSeverityBadge)('medium')} | ${counts.medium} |`);
     lines.push(`| ${(0, severity_1.getSeverityBadge)('low')} | ${counts.low} |`);
     lines.push(`| **Total** | **${violations.length}** |`);
-    lines.push('');
-    // Threshold info
-    lines.push(`*Check fails on violations of severity \`${failOnThreshold}\` or higher*`);
     lines.push('');
     // Violations details (limited)
     if (violations.length > 0) {
@@ -31916,24 +31904,22 @@ const severity_1 = __nccwpck_require__(5278);
 /**
  * Post violation comments as a PR review
  */
-async function postViolationComments(octokit, violations, commitSha, commentThreshold) {
+async function postViolationComments(octokit, violations, commitSha) {
     const { owner, repo } = github.context.repo;
     const prNumber = github.context.payload.pull_request?.number;
     if (!prNumber) {
         core.warning('No PR number found, skipping comment posting');
         return;
     }
-    // Filter violations by threshold
-    const relevantViolations = (0, severity_1.filterByThreshold)(violations, commentThreshold);
-    if (relevantViolations.length === 0) {
-        core.info('No violations meet comment threshold, skipping comments');
+    if (violations.length === 0) {
+        core.info('No violations to comment on');
         return;
     }
-    core.info(`Posting ${relevantViolations.length} violation comments on PR #${prNumber}`);
+    core.info(`Posting ${violations.length} violation comments on PR #${prNumber}`);
     // Build review comments with multi-line support
     // When a suggested fix is present, use its line range so the ```suggestion
     // block replaces exactly the right lines when "Apply suggestion" is clicked.
-    const comments = relevantViolations
+    const comments = violations
         .filter((v) => v.location.file && v.location.line_start > 0)
         .map((violation) => {
         // Determine line range: prefer fix range (accurate for suggestions),
@@ -31949,38 +31935,57 @@ async function postViolationComments(octokit, violations, commitSha, commentThre
         const lineEnd = hasFixRange
             ? fixEnd
             : violation.location.line_end || violation.location.line_start;
+        const side = violation.location.side === 'LEFT' ? 'LEFT' : 'RIGHT';
         const comment = {
             path: violation.location.file,
             line: lineEnd,
             body: formatViolationComment(violation),
+            side,
         };
         // Add multi-line range if spanning multiple lines
         if (lineEnd > lineStart) {
             comment.start_line = lineStart;
-            comment.side = 'RIGHT';
-            comment.start_side = 'RIGHT';
+            comment.start_side = side;
         }
         return comment;
     });
     if (comments.length === 0) {
         core.info('No violations with valid locations to comment on');
-        return;
     }
-    try {
-        await octokit.rest.pulls.createReview({
-            owner,
-            repo,
-            pull_number: prNumber,
-            commit_id: commitSha,
-            event: 'COMMENT',
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            comments: comments,
-        });
-        core.info(`Successfully posted ${comments.length} review comments`);
+    else {
+        try {
+            await octokit.rest.pulls.createReview({
+                owner,
+                repo,
+                pull_number: prNumber,
+                commit_id: commitSha,
+                event: 'COMMENT',
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                comments: comments,
+            });
+            core.info(`Successfully posted ${comments.length} review comments`);
+        }
+        catch (error) {
+            // Don't fail the action if we can't post comments
+            core.warning(`Failed to post review comments: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
-    catch (error) {
-        // Don't fail the action if we can't post comments
-        core.warning(`Failed to post review comments: ${error instanceof Error ? error.message : String(error)}`);
+    // Post fallback issue comment for violations without valid locations
+    const locationlessViolations = violations.filter((v) => !v.location.file || v.location.line_start <= 0);
+    if (locationlessViolations.length > 0) {
+        try {
+            const body = formatFallbackComment(locationlessViolations);
+            await octokit.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body,
+            });
+            core.info(`Posted fallback comment for ${locationlessViolations.length} locationless violations`);
+        }
+        catch (error) {
+            core.warning(`Failed to post fallback comment: ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 }
 /**
@@ -32091,6 +32096,37 @@ function formatViolationComment(violation) {
     if (violation.id) {
         lines.push('');
         lines.push(`<!-- asymptote:violation_id=${violation.id} -->`);
+    }
+    return lines.join('\n');
+}
+/**
+ * Format a fallback comment for violations that lack valid file/line locations.
+ * Posted as a regular issue comment in the PR conversation timeline.
+ */
+function formatFallbackComment(violations) {
+    const lines = [];
+    lines.push('## Asymptote Security Findings');
+    lines.push('');
+    lines.push(`The following ${violations.length === 1 ? 'violation was' : `${violations.length} violations were`} detected but could not be pinned to a specific line in the diff:`);
+    lines.push('');
+    for (const violation of violations) {
+        const badge = (0, severity_1.getSeverityBadge)(violation.severity);
+        lines.push(`<details>`);
+        lines.push(`<summary>${badge} ${violation.policy_name}${violation.location.file ? ` — <code>${violation.location.file}</code>` : ''}</summary>`);
+        lines.push('');
+        lines.push(`**Issue:** ${violation.message}`);
+        lines.push('');
+        if (violation.remediation) {
+            lines.push(`**How to fix:** ${violation.remediation}`);
+            lines.push('');
+        }
+        if (violation.metadata.cwe_id) {
+            const cweNumber = violation.metadata.cwe_id.replace(/^CWE-/i, '');
+            lines.push(`**Reference:** [CWE-${cweNumber}](https://cwe.mitre.org/data/definitions/${cweNumber}.html)`);
+            lines.push('');
+        }
+        lines.push(`</details>`);
+        lines.push('');
     }
     return lines.join('\n');
 }
@@ -32393,8 +32429,6 @@ async function run() {
         core.setSecret(config.apiKey);
         core.info('Asymptote Security Scan starting...');
         core.debug(`API URL: ${config.apiUrl}`);
-        core.debug(`Fail on: ${config.failOn}`);
-        core.debug(`Comment on: ${config.commentOn}`);
         // 2. Verify PR context
         if (github.context.eventName !== 'pull_request') {
             core.setFailed(`This action only runs on pull_request events. Current event: ${github.context.eventName}`);
@@ -32447,6 +32481,26 @@ async function run() {
             return;
         }
         core.info(`PR #${diffResult.prNumber}: ${diffResult.files.length} files changed`);
+        // 4b. Get PR author email from webhook payload
+        const prAuthorLogin = github.context.payload.pull_request?.user?.login;
+        core.info(`PR author login: ${prAuthorLogin || '(not found)'}`);
+        let prAuthorEmail;
+        if (prAuthorLogin) {
+            try {
+                const user = await octokit.rest.users.getByUsername({
+                    username: prAuthorLogin,
+                });
+                prAuthorEmail = user.data.email || prAuthorLogin;
+            }
+            catch {
+                prAuthorEmail = prAuthorLogin;
+            }
+        }
+        core.info(`PR author resolved to: ${prAuthorEmail || '(not resolved)'}`);
+        if (!prAuthorEmail) {
+            prAuthorEmail = github.context.actor;
+            core.info(`Using github.context.actor as fallback: ${prAuthorEmail}`);
+        }
         // 5. Call Asymptote API
         core.info('Submitting diff for evaluation...');
         const client = new client_1.AsymptoteClient({
@@ -32467,6 +32521,7 @@ async function run() {
                     tool: 'github-action',
                     pr_number: diffResult.prNumber,
                     commit_sha: diffResult.commitSha,
+                    pr_author: prAuthorEmail,
                 },
             });
         }
@@ -32489,9 +32544,8 @@ async function run() {
         const decision = result.decision || 'allow';
         const counts = (0, severity_1.countBySeverity)(violations);
         core.info(`Evaluation complete: ${decision} (${violations.length} violations)`);
-        // 5b. Generate suggested fixes for high/critical violations
-        const commentableViolations = (0, severity_1.filterByThreshold)(violations, config.commentOn);
-        if (commentableViolations.length > 0) {
+        // 5b. Generate suggested fixes for violations
+        if (violations.length > 0) {
             core.info('Generating suggested fixes...');
             const fixes = await client.getSuggestedFixes(result.evaluation_id, diffResult.diff);
             if (fixes.length > 0) {
@@ -32511,20 +32565,19 @@ async function run() {
                 }
             }
         }
-        // 7. Post review comments
-        await (0, comments_1.postViolationComments)(octokit, violations, diffResult.commitSha, config.commentOn);
+        // 6. Post review comments
+        await (0, comments_1.postViolationComments)(octokit, violations, diffResult.commitSha);
         // 7. Create check run with annotations
-        await (0, checks_1.createCheckRun)(octokit, result, diffResult.commitSha, config.failOn);
+        await (0, checks_1.createCheckRun)(octokit, result, diffResult.commitSha);
         // 8. Set outputs
         core.setOutput('decision', decision);
         core.setOutput('total_violations', violations.length);
         core.setOutput('critical_count', counts.critical);
         core.setOutput('high_count', counts.high);
         core.setOutput('medium_count', counts.medium);
-        // 9. Fail if threshold exceeded
-        if ((0, severity_1.shouldFail)(violations, config.failOn)) {
-            const failingViolations = (0, severity_1.filterByThreshold)(violations, config.failOn);
-            core.setFailed(`Security check failed: ${failingViolations.length} violation(s) at or above ${config.failOn} severity`);
+        // 9. Fail if any violations exist
+        if (violations.length > 0) {
+            core.setFailed(`Security check failed: ${violations.length} violation(s) found`);
         }
         else {
             core.info('Security check passed');
@@ -32617,49 +32670,8 @@ function filterDiff(diff, excludePatterns) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.SEVERITY_ORDER = void 0;
-exports.getSeverityPriority = getSeverityPriority;
-exports.meetsThreshold = meetsThreshold;
-exports.filterByThreshold = filterByThreshold;
-exports.shouldFail = shouldFail;
 exports.countBySeverity = countBySeverity;
 exports.getSeverityBadge = getSeverityBadge;
-exports.parseSeverity = parseSeverity;
-/**
- * Severity levels in order from most to least severe
- */
-exports.SEVERITY_ORDER = [
-    'critical',
-    'high',
-    'medium',
-    'low',
-    'info',
-];
-/**
- * Get the numeric priority of a severity level (lower = more severe)
- */
-function getSeverityPriority(severity) {
-    const index = exports.SEVERITY_ORDER.indexOf(severity);
-    return index === -1 ? exports.SEVERITY_ORDER.length : index;
-}
-/**
- * Check if a violation meets the minimum severity threshold
- */
-function meetsThreshold(violationSeverity, threshold) {
-    return getSeverityPriority(violationSeverity) <= getSeverityPriority(threshold);
-}
-/**
- * Filter violations that meet the minimum severity threshold
- */
-function filterByThreshold(violations, threshold) {
-    return violations.filter((v) => meetsThreshold(v.severity, threshold));
-}
-/**
- * Check if any violations meet the failure threshold
- */
-function shouldFail(violations, failOnThreshold) {
-    return violations.some((v) => meetsThreshold(v.severity, failOnThreshold));
-}
 /**
  * Count violations by severity
  */
@@ -32690,16 +32702,6 @@ function getSeverityBadge(severity) {
         info: 'ℹ️ Info',
     };
     return badges[severity] || severity;
-}
-/**
- * Validate severity string input
- */
-function parseSeverity(input) {
-    const normalized = input.toLowerCase().trim();
-    if (exports.SEVERITY_ORDER.includes(normalized)) {
-        return normalized;
-    }
-    throw new Error(`Invalid severity: ${input}. Must be one of: ${exports.SEVERITY_ORDER.join(', ')}`);
 }
 
 

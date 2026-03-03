@@ -3,7 +3,6 @@ import * as github from '@actions/github';
 import { Severity, Violation, GetEvaluationResponse } from '../api/types';
 import {
   countBySeverity,
-  shouldFail,
   getSeverityBadge,
 } from '../utils/severity';
 
@@ -29,22 +28,20 @@ interface Annotation {
 export async function createCheckRun(
   octokit: Octokit,
   result: GetEvaluationResponse,
-  commitSha: string,
-  failOnThreshold: Severity
+  commitSha: string
 ): Promise<void> {
   const { owner, repo } = github.context.repo;
 
   const violations = result.violations || [];
   const decision = result.decision || 'allow';
 
-  const shouldFailCheck = shouldFail(violations, failOnThreshold);
-  const conclusion = shouldFailCheck ? 'failure' : 'success';
+  const conclusion = violations.length > 0 ? 'failure' : 'success';
 
   // Build annotations from violations
   const annotations = buildAnnotations(violations);
 
   // Build summary text
-  const summaryText = buildSummaryText(violations, decision, failOnThreshold);
+  const summaryText = buildSummaryText(violations, decision);
 
   core.info(
     `Creating check run with ${annotations.length} annotations (conclusion: ${conclusion})`
@@ -134,7 +131,6 @@ async function addRemainingAnnotations(
 function buildAnnotations(violations: Violation[]): Annotation[] {
   return violations
     .filter((v) => v.location.file && v.location.line_start > 0)
-    .filter((v) => v.severity !== 'low' && v.severity !== 'info')
     .map((violation) => ({
       path: violation.location.file,
       start_line: violation.location.line_start,
@@ -210,8 +206,7 @@ function getCheckTitle(violations: Violation[]): string {
  */
 function buildSummaryText(
   violations: Violation[],
-  decision: string,
-  failOnThreshold: Severity
+  decision: string
 ): string {
   const lines: string[] = [];
 
@@ -236,12 +231,6 @@ function buildSummaryText(
   lines.push(`| ${getSeverityBadge('medium')} | ${counts.medium} |`);
   lines.push(`| ${getSeverityBadge('low')} | ${counts.low} |`);
   lines.push(`| **Total** | **${violations.length}** |`);
-  lines.push('');
-
-  // Threshold info
-  lines.push(
-    `*Check fails on violations of severity \`${failOnThreshold}\` or higher*`
-  );
   lines.push('');
 
   // Violations details (limited)

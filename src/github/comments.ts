@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
-import { Severity, Violation } from '../api/types';
-import { filterByThreshold, getSeverityBadge } from '../utils/severity';
+import { Violation } from '../api/types';
+import { getSeverityBadge } from '../utils/severity';
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
@@ -20,8 +20,7 @@ interface ReviewComment {
 export async function postViolationComments(
   octokit: Octokit,
   violations: Violation[],
-  commitSha: string,
-  commentThreshold: Severity
+  commitSha: string
 ): Promise<void> {
   const { owner, repo } = github.context.repo;
   const prNumber = github.context.payload.pull_request?.number;
@@ -31,22 +30,19 @@ export async function postViolationComments(
     return;
   }
 
-  // Filter violations by threshold
-  const relevantViolations = filterByThreshold(violations, commentThreshold);
-
-  if (relevantViolations.length === 0) {
-    core.info('No violations meet comment threshold, skipping comments');
+  if (violations.length === 0) {
+    core.info('No violations to comment on');
     return;
   }
 
   core.info(
-    `Posting ${relevantViolations.length} violation comments on PR #${prNumber}`
+    `Posting ${violations.length} violation comments on PR #${prNumber}`
   );
 
   // Build review comments with multi-line support
   // When a suggested fix is present, use its line range so the ```suggestion
   // block replaces exactly the right lines when "Apply suggestion" is clicked.
-  const comments: ReviewComment[] = relevantViolations
+  const comments: ReviewComment[] = violations
     .filter((v) => v.location.file && v.location.line_start > 0)
     .map((violation) => {
       // Determine line range: prefer fix range (accurate for suggestions),
@@ -65,17 +61,19 @@ export async function postViolationComments(
         ? fixEnd
         : violation.location.line_end || violation.location.line_start;
 
+      const side = violation.location.side === 'LEFT' ? 'LEFT' : 'RIGHT';
+
       const comment: ReviewComment = {
         path: violation.location.file,
         line: lineEnd,
         body: formatViolationComment(violation),
+        side,
       };
 
       // Add multi-line range if spanning multiple lines
       if (lineEnd > lineStart) {
         comment.start_line = lineStart;
-        comment.side = 'RIGHT';
-        comment.start_side = 'RIGHT';
+        comment.start_side = side;
       }
 
       return comment;
@@ -83,26 +81,49 @@ export async function postViolationComments(
 
   if (comments.length === 0) {
     core.info('No violations with valid locations to comment on');
-    return;
+  } else {
+    try {
+      await octokit.rest.pulls.createReview({
+        owner,
+        repo,
+        pull_number: prNumber,
+        commit_id: commitSha,
+        event: 'COMMENT',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        comments: comments as any,
+      });
+
+      core.info(`Successfully posted ${comments.length} review comments`);
+    } catch (error) {
+      // Don't fail the action if we can't post comments
+      core.warning(
+        `Failed to post review comments: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 
-  try {
-    await octokit.rest.pulls.createReview({
-      owner,
-      repo,
-      pull_number: prNumber,
-      commit_id: commitSha,
-      event: 'COMMENT',
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      comments: comments as any,
-    });
+  // Post fallback issue comment for violations without valid locations
+  const locationlessViolations = violations.filter(
+    (v) => !v.location.file || v.location.line_start <= 0
+  );
 
-    core.info(`Successfully posted ${comments.length} review comments`);
-  } catch (error) {
-    // Don't fail the action if we can't post comments
-    core.warning(
-      `Failed to post review comments: ${error instanceof Error ? error.message : String(error)}`
-    );
+  if (locationlessViolations.length > 0) {
+    try {
+      const body = formatFallbackComment(locationlessViolations);
+      await octokit.rest.issues.createComment({
+        owner,
+        repo,
+        issue_number: prNumber,
+        body,
+      });
+      core.info(
+        `Posted fallback comment for ${locationlessViolations.length} locationless violations`
+      );
+    } catch (error) {
+      core.warning(
+        `Failed to post fallback comment: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
   }
 }
 
@@ -236,6 +257,47 @@ function formatViolationComment(violation: Violation): string {
     lines.push(
       `<!-- asymptote:violation_id=${violation.id} -->`
     );
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Format a fallback comment for violations that lack valid file/line locations.
+ * Posted as a regular issue comment in the PR conversation timeline.
+ */
+function formatFallbackComment(violations: Violation[]): string {
+  const lines: string[] = [];
+
+  lines.push('## Asymptote Security Findings');
+  lines.push('');
+  lines.push(
+    `The following ${violations.length === 1 ? 'violation was' : `${violations.length} violations were`} detected but could not be pinned to a specific line in the diff:`
+  );
+  lines.push('');
+
+  for (const violation of violations) {
+    const badge = getSeverityBadge(violation.severity);
+    lines.push(`<details>`);
+    lines.push(
+      `<summary>${badge} ${violation.policy_name}${violation.location.file ? ` — <code>${violation.location.file}</code>` : ''}</summary>`
+    );
+    lines.push('');
+    lines.push(`**Issue:** ${violation.message}`);
+    lines.push('');
+    if (violation.remediation) {
+      lines.push(`**How to fix:** ${violation.remediation}`);
+      lines.push('');
+    }
+    if (violation.metadata.cwe_id) {
+      const cweNumber = violation.metadata.cwe_id.replace(/^CWE-/i, '');
+      lines.push(
+        `**Reference:** [CWE-${cweNumber}](https://cwe.mitre.org/data/definitions/${cweNumber}.html)`
+      );
+      lines.push('');
+    }
+    lines.push(`</details>`);
+    lines.push('');
   }
 
   return lines.join('\n');
