@@ -32493,6 +32493,7 @@ async function run() {
                         owner: github.context.repo.owner,
                         repo: github.context.repo.repo,
                         pull_number: diffResult.prNumber,
+                        per_page: 100,
                     });
                     const emailCounts = new Map();
                     for (const commit of commits.data) {

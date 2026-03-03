@@ -101,6 +101,7 @@ async function run(): Promise<void> {
             owner: github.context.repo.owner,
             repo: github.context.repo.repo,
             pull_number: diffResult.prNumber,
+            per_page: 100,
           });
           const emailCounts = new Map<string, number>();
           for (const commit of commits.data) {
