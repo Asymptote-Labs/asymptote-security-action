@@ -125,12 +125,17 @@ async function run(): Promise<void> {
         }
       }
     }
-    core.info(`PR author resolved to: ${prAuthor || '(not resolved)'}`);
+    core.info(
+      `PR author resolved to: ${prAuthor ? '(resolved, masked)' : '(not resolved)'}`
+    );
 
     if (!prAuthor) {
       prAuthor = github.context.actor;
-      core.info(`Using github.context.actor as fallback: ${prAuthor}`);
+      core.info('Using github.context.actor as fallback');
     }
+
+    // Mask the resolved author value so it is redacted from CI logs
+    core.setSecret(prAuthor);
 
     // 5. Call Asymptote API
     core.info('Submitting diff for evaluation...');
