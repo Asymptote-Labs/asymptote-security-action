@@ -31954,7 +31954,7 @@ async function postViolationComments(octokit, violations, commitSha) {
     }
     else {
         try {
-            await octokit.rest.pulls.createReview({
+            const reviewResponse = await octokit.rest.pulls.createReview({
                 owner,
                 repo,
                 pull_number: prNumber,
@@ -31964,6 +31964,39 @@ async function postViolationComments(octokit, violations, commitSha) {
                 comments: comments,
             });
             core.info(`Successfully posted ${comments.length} review comments`);
+            // Add thumbs up/down reactions to each review comment for user feedback
+            try {
+                const reviewId = reviewResponse.data.id;
+                const reviewComments = await octokit.rest.pulls.listCommentsForReview({
+                    owner,
+                    repo,
+                    pull_number: prNumber,
+                    review_id: reviewId,
+                });
+                for (const comment of reviewComments.data) {
+                    try {
+                        await octokit.rest.reactions.createForPullRequestReviewComment({
+                            owner,
+                            repo,
+                            comment_id: comment.id,
+                            content: '+1',
+                        });
+                        await octokit.rest.reactions.createForPullRequestReviewComment({
+                            owner,
+                            repo,
+                            comment_id: comment.id,
+                            content: '-1',
+                        });
+                    }
+                    catch {
+                        // Best-effort: don't fail if reactions fail for a single comment
+                    }
+                }
+                core.info(`Added reactions to ${reviewComments.data.length} review comments`);
+            }
+            catch (error) {
+                core.warning(`Failed to add reactions to review comments: ${error instanceof Error ? error.message : String(error)}`);
+            }
         }
         catch (error) {
             // Don't fail the action if we can't post comments
@@ -32041,57 +32074,46 @@ function escapeHtmlAttr(s) {
 }
 function buildCursorDeeplinkHtml(violation) {
     const url = escapeHtmlAttr(buildCursorRedirectUrl(violation));
-    return `<p><a href="${url}" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a></p>`;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>`;
+}
+function buildDashboardDeeplinkHtml(violation) {
+    const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
+    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="View in dashboard" width="115" height="28"></a>`;
 }
 /**
  * Format a violation as a markdown comment
  */
 function formatViolationComment(violation) {
     const lines = [];
-    // Header with logo and severity badge
-    lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> Asymptote Security Scan — ${(0, severity_1.getSeverityBadge)(violation.severity)} Security Issue`);
+    // Header with logo and title
+    const title = violation.title || violation.message;
+    lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> Asymptote Security Scan — ${title}`);
     lines.push('');
-    // Policy info
-    lines.push(`**Policy:** ${violation.policy_name}`);
-    if (violation.category) {
-        lines.push(`**Category:** ${violation.category}`);
-    }
+    // Severity badge on its own line
+    lines.push(`${(0, severity_1.getSeverityBadge)(violation.severity)} Severity`);
     lines.push('');
-    // Message
-    lines.push(`**Issue:** ${violation.message}`);
-    lines.push('');
-    // Explanation
+    // Message + explanation merged into one paragraph
+    let body = violation.message;
     if (violation.explanation) {
-        lines.push('**Why this matters:**');
-        lines.push(violation.explanation);
-        lines.push('');
+        body += ` ${violation.explanation}`;
     }
-    // Remediation
-    if (violation.remediation) {
-        lines.push('**How to fix:**');
-        lines.push(violation.remediation);
-        lines.push('');
-    }
+    lines.push(body);
+    lines.push('');
     // Suggested fix (GitHub suggestion block)
     if (violation.metadata.suggested_fix) {
-        lines.push('**Suggested fix:**');
         lines.push(buildSuggestionBlock(violation.metadata.suggested_fix));
         lines.push('');
     }
-    // CWE reference
-    if (violation.metadata.cwe_id) {
-        // Extract just the number (handle both "89" and "CWE-89" formats)
-        const cweNumber = violation.metadata.cwe_id.replace(/^CWE-/i, '');
-        lines.push(`**Reference:** [CWE-${cweNumber}](https://cwe.mitre.org/data/definitions/${cweNumber}.html)`);
-        lines.push('');
-    }
-    // Dashboard link
+    // Action buttons: Cursor + Dashboard
+    const buttons = [];
+    buttons.push(buildCursorDeeplinkHtml(violation));
     if (violation.id) {
-        lines.push(`[View in Asymptote Dashboard](https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id})`);
-        lines.push('');
+        buttons.push(buildDashboardDeeplinkHtml(violation));
     }
-    // Cursor deeplink button
-    lines.push(buildCursorDeeplinkHtml(violation));
+    lines.push(`<p>${buttons.join('&nbsp;&nbsp;')}</p>`);
+    lines.push('');
+    // Policy at bottom
+    lines.push(`**Policy:** ${violation.policy_name}`);
     // Embed violation ID for webhook handler to link comment back to violation
     if (violation.id) {
         lines.push('');

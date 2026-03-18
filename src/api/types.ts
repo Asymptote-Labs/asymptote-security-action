@@ -68,6 +68,7 @@ export interface Violation {
   id: string;
   policy_id: string | null;
   policy_name: string;
+  title?: string;
   category: string;
   severity: Severity;
   enforcement: string;
