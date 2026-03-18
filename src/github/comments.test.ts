@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import * as github from '@actions/github';
 import { Violation } from '../api/types';
 import { formatViolationComment, postViolationComments } from './comments';
@@ -48,8 +49,17 @@ test('formats severity line, explanation, and dashboard button as requested', ()
   );
   assert.match(
     comment,
-    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="143" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/main\/assets\/view-in-dashboard-badge\.svg"><\/a>/
+    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="157" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/main\/assets\/view-in-dashboard-badge\.svg"><\/a>/
   );
+});
+
+test('dashboard badge inlines a resized 24x24 logo', () => {
+  const badgeSvg = readFileSync('assets/view-in-dashboard-badge.svg', 'utf8');
+
+  assert.match(badgeSvg, /width="157" height="28" viewBox="0 0 157 28"/);
+  assert.match(badgeSvg, /<image href="data:image\/png;base64,/);
+  assert.match(badgeSvg, /x="10" y="2" width="24" height="24"/);
+  assert.doesNotMatch(badgeSvg, /https:\/\/asymptotelabs\.ai\/logo\.png/);
 });
 
 test('capitalizes the first character of the displayed title and uses HTML header markup', () => {
