@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="143" height="28" viewBox="0 0 143 28" role="img" aria-label="View in Dashboard">
-  <rect width="143" height="28" rx="6" fill="#111827"/>
-  <rect x="0.5" y="0.5" width="142" height="27" rx="5.5" fill="none" stroke="#374151"/>
-  <image href="https://asymptotelabs.ai/logo.png" x="10" y="6" width="16" height="16" preserveAspectRatio="xMidYMid meet"/>
-  <text x="33" y="18" fill="#F9FAFB" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="600">View in Dashboard</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="157" height="28" viewBox="0 0 157 28" role="img" aria-label="View in Dashboard">
+  <rect width="157" height="28" rx="6" fill="#111827"/>
+  <rect x="0.5" y="0.5" width="156" height="27" rx="5.5" fill="none" stroke="#374151"/>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAIAAABvFaqvAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAGKADAAQAAAABAAAAGAAAAADiNXWtAAACzUlEQVQ4EaVUz2sTQRSeN7PJNgoNIghpi1aLCsWzKMWD1lsrYsGzJy8i+OOknjwJxVMtiIinevBf8Cj6T1hpIzQtDXiwNDXJbnZn/N6b3U3aemhrEmYnb+Z9833fe7M0N7tprVVOKYXROcyyL+Yc5xgv+5kfbX+jZJGmACi2hwWLrbLssTDNI1ncCn6xCmiG88FyWNZyUp6TLzAXn78H3fMSjgWKVqSVDgYU5ad5jfluhvKRXSgZQaAYpQEERkV+pl9IsCmyciAUo5TepfxIXIwiEkbMuM//kIqAAl2GqGAktT8qChgFYsX+Gtk0hUUWHmKD+IUIHxYY7d3tcwEjRcHeSitnnU16tjZaKgXUaHTwX5FLEzs6VgZKcy2GJ0bnigQFtQMj8UeIYQAKkXvwZGTi/FDUtd1OuvB6baeVPH4xXquFcHX7d/J2fiNuO2MESzyCTTR7cyXt9YpKI3nm9olr16svn9WjyN6aO3n5avXPTvqrGX98v6ksPXp+urWVLi02K0NBpg5YYUk8gAuMxBbgwlycPPbty1ZrO9HafVrahE2Tl45/WNwgRypRXz9vnbtQCTT7wvXKGGE+WHvloGtluX1lajisUBynd+6e0kSrPzr37o+Q5cypG9X1euTng1g0O73ci2NhxLyshXj38OnYyFjYaadAeTPfaG9bKBquol0oidy7V81uy4JUwYhCQzPT35MoBgZjSaWhDpU+c3YoLJm1etclFBBU0vhEpWT0+moMOpgUKOClwkD6aAAFnFBsY1TjZ4TkMromz1mvx8YBAp++O14dZX2Uc+HqCyjf6TyfT8YNwLgvv/BIMdA/UeTNkO3zKAM1KvILdbj83JCD77ri/XJwFPBF7+OKeEr8PBoKeDlWgFdv4cshFWXesWq+a//FxTvAZqPHymEISHEOLcE14lHOQVCWOEIwU0EBnvhBDqzRaBb8RZ/9BURXniAht6chAAAAAElFTkSuQmCC" x="10" y="2" width="24" height="24" preserveAspectRatio="xMidYMid meet"/>
+  <text x="42" y="18" fill="#F9FAFB" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="600">View in Dashboard</text>
 </svg>
