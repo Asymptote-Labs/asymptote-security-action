@@ -49,16 +49,21 @@ test('formats severity line, explanation, and dashboard button as requested', ()
   );
   assert.match(
     comment,
-    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="157" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/main\/assets\/view-in-dashboard-badge\.svg"><\/a>/
+    /<picture style="vertical-align: middle"><source media="\(prefers-color-scheme: dark\)" srcset="https:\/\/cursor\.com\/assets\/images\/fix-in-cursor-dark\.png"><source media="\(prefers-color-scheme: light\)" srcset="https:\/\/cursor\.com\/assets\/images\/fix-in-cursor-light\.png"><img alt="Fix in Cursor" width="115" height="28" src="https:\/\/cursor\.com\/assets\/images\/fix-in-cursor-dark\.png" style="vertical-align: middle"><\/picture>/
+  );
+  assert.match(
+    comment,
+    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="149" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/main\/assets\/view-in-dashboard-badge\.svg" style="vertical-align: middle"><\/a>/
   );
 });
 
-test('dashboard badge inlines a resized 24x24 logo', () => {
+test('dashboard badge inlines a resized 16x16 logo', () => {
   const badgeSvg = readFileSync('assets/view-in-dashboard-badge.svg', 'utf8');
 
-  assert.match(badgeSvg, /width="157" height="28" viewBox="0 0 157 28"/);
+  assert.match(badgeSvg, /width="149" height="28" viewBox="0 0 149 28"/);
   assert.match(badgeSvg, /<image href="data:image\/png;base64,/);
-  assert.match(badgeSvg, /x="10" y="2" width="24" height="24"/);
+  assert.match(badgeSvg, /x="10" y="6" width="16" height="16"/);
+  assert.match(badgeSvg, /font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"/);
   assert.doesNotMatch(badgeSvg, /https:\/\/asymptotelabs\.ai\/logo\.png/);
 });
 
