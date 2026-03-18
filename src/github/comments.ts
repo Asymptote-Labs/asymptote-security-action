@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { Violation } from '../api/types';
-import { getSeverityBadge } from '../utils/severity';
+import { getSeverityBadge, getSeverityIcon } from '../utils/severity';
 
 type Octokit = ReturnType<typeof github.getOctokit>;
 
@@ -230,35 +230,27 @@ function buildCursorDeeplinkHtml(violation: Violation): string {
 
 function buildDashboardDeeplinkHtml(violation: Violation): string {
   const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="View in dashboard" width="115" height="28"></a>`;
+  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="16" height="16" align="absmiddle"> View in dashboard</a>`;
 }
 
 /**
  * Format a violation as a markdown comment
  */
-function formatViolationComment(violation: Violation): string {
+export function formatViolationComment(violation: Violation): string {
   const lines: string[] = [];
 
   // Header with logo and title
-  const title = violation.title || violation.message;
-  lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> Asymptote Security Scan — ${title}`);
+  const title = capitalizeFirstCharacter(violation.title || violation.message);
+  lines.push(`<h3><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20" align="absmiddle"> Asymptote Security Scan — ${escapeHtml(title)}</h3>`);
   lines.push('');
 
-  // Severity badge on its own line
-  lines.push(`${getSeverityBadge(violation.severity)} Severity`);
+  // Severity + policy metadata
+  const severityLabel = capitalizeFirstCharacter(violation.severity);
+  lines.push(`${getSeverityIcon(violation.severity)} ${severityLabel} / **Policy:** ${violation.policy_name}`);
   lines.push('');
 
-  // Message + explanation merged into one paragraph
-  // When title is absent, message is already shown in the header — only show explanation
-  let body: string;
-  if (violation.title) {
-    body = violation.message;
-    if (violation.explanation) {
-      body += ` ${violation.explanation}`;
-    }
-  } else {
-    body = violation.explanation || '';
-  }
+  // Explanation only
+  const body = formatExplanation(violation.explanation || '');
   if (body) {
     lines.push(body);
   }
@@ -278,9 +270,6 @@ function formatViolationComment(violation: Violation): string {
   }
   lines.push(`<p>${buttons.join('&nbsp;&nbsp;')}</p>`);
   lines.push('');
-
-  // Policy at bottom
-  lines.push(`**Policy:** ${violation.policy_name}`);
 
   // Embed violation ID for webhook handler to link comment back to violation
   if (violation.id) {
@@ -332,6 +321,33 @@ function formatFallbackComment(violations: Violation[]): string {
   }
 
   return lines.join('\n');
+}
+
+function capitalizeFirstCharacter(value: string): string {
+  if (!value) {
+    return value;
+  }
+
+  return value.replace(/^(\s*)(\S)/, (_, leadingWhitespace: string, firstChar: string) =>
+    `${leadingWhitespace}${firstChar.toUpperCase()}`
+  );
+}
+
+function formatExplanation(explanation: string): string {
+  if (!explanation) {
+    return '';
+  }
+
+  return explanation.replace(/`([^`\n]+)`/g, (_match: string, code: string) => {
+    return `<code>${escapeHtml(code)}</code>`;
+  });
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
 
 /**

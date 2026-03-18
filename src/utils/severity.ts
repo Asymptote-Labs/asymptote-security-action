@@ -36,3 +36,17 @@ export function getSeverityBadge(severity: Severity): string {
   };
   return badges[severity] || severity;
 }
+
+/**
+ * Get severity icon for display when the label is rendered separately.
+ */
+export function getSeverityIcon(severity: Severity): string {
+  const icons: Record<Severity, string> = {
+    critical: '🔴',
+    high: '🟠',
+    medium: '🟡',
+    low: '🔵',
+    info: 'ℹ️',
+  };
+  return icons[severity] || severity;
+}
