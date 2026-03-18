@@ -104,6 +104,7 @@ export async function postViolationComments(
             repo,
             pull_number: prNumber,
             review_id: reviewId,
+            per_page: 100,
           });
 
         for (const comment of reviewComments.data) {
@@ -248,11 +249,19 @@ function formatViolationComment(violation: Violation): string {
   lines.push('');
 
   // Message + explanation merged into one paragraph
-  let body = violation.message;
-  if (violation.explanation) {
-    body += ` ${violation.explanation}`;
+  // When title is absent, message is already shown in the header — only show explanation
+  let body: string;
+  if (violation.title) {
+    body = violation.message;
+    if (violation.explanation) {
+      body += ` ${violation.explanation}`;
+    }
+  } else {
+    body = violation.explanation || '';
   }
-  lines.push(body);
+  if (body) {
+    lines.push(body);
+  }
   lines.push('');
 
   // Suggested fix (GitHub suggestion block)

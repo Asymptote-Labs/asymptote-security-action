@@ -31972,6 +31972,7 @@ async function postViolationComments(octokit, violations, commitSha) {
                     repo,
                     pull_number: prNumber,
                     review_id: reviewId,
+                    per_page: 100,
                 });
                 for (const comment of reviewComments.data) {
                     try {
@@ -32093,11 +32094,20 @@ function formatViolationComment(violation) {
     lines.push(`${(0, severity_1.getSeverityBadge)(violation.severity)} Severity`);
     lines.push('');
     // Message + explanation merged into one paragraph
-    let body = violation.message;
-    if (violation.explanation) {
-        body += ` ${violation.explanation}`;
+    // When title is absent, message is already shown in the header — only show explanation
+    let body;
+    if (violation.title) {
+        body = violation.message;
+        if (violation.explanation) {
+            body += ` ${violation.explanation}`;
+        }
     }
-    lines.push(body);
+    else {
+        body = violation.explanation || '';
+    }
+    if (body) {
+        lines.push(body);
+    }
     lines.push('');
     // Suggested fix (GitHub suggestion block)
     if (violation.metadata.suggested_fix) {
