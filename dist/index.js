@@ -31458,7 +31458,7 @@ const INITIAL_DELAY_MS = 1000;
 const BACKOFF_MULTIPLIER = 1.5;
 const MAX_DELAY_MS = 10000;
 const MAX_ATTEMPTS = 30;
-const TIMEOUT_MS = 120000;
+const TIMEOUT_MS = 1200000;
 class AsymptoteClient {
     apiKey;
     baseUrl;
