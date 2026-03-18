@@ -32087,12 +32087,12 @@ function escapeHtmlAttr(s) {
 }
 function buildCursorDeeplinkHtml(violation) {
     const url = escapeHtmlAttr(buildCursorRedirectUrl(violation));
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer"><picture><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png"></picture></a>`;
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer"><picture style="vertical-align: middle"><source media="(prefers-color-scheme: dark)" srcset="https://cursor.com/assets/images/fix-in-cursor-dark.png"><source media="(prefers-color-scheme: light)" srcset="https://cursor.com/assets/images/fix-in-cursor-light.png"><img alt="Fix in Cursor" width="115" height="28" src="https://cursor.com/assets/images/fix-in-cursor-dark.png" style="vertical-align: middle"></picture></a>`;
 }
 function buildDashboardDeeplinkHtml(violation) {
     const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
     const badgeUrl = escapeHtmlAttr(DASHBOARD_BADGE_URL);
-    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="157" height="28" src="${badgeUrl}"></a>`;
+    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="149" height="28" src="${badgeUrl}" style="vertical-align: middle"></a>`;
 }
 /**
  * Format a violation as a markdown comment
