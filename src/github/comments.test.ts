@@ -28,7 +28,15 @@ function createViolation(overrides: Partial<Violation> = {}): Violation {
 }
 
 test('formats severity line, explanation, and dashboard button as requested', () => {
+  const originalRepository = process.env.GITHUB_REPOSITORY;
+  const originalSha = github.context.sha;
+  process.env.GITHUB_REPOSITORY = 'Asymptote-Labs/asymptote-security-action';
+  github.context.sha = 'deadbeef';
+
   const comment = formatViolationComment(createViolation());
+
+  process.env.GITHUB_REPOSITORY = originalRepository;
+  github.context.sha = originalSha;
 
   assert.match(
     comment,
@@ -48,10 +56,8 @@ test('formats severity line, explanation, and dashboard button as requested', ()
   );
   assert.match(
     comment,
-    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="143" height="28" src="data:image\/svg\+xml;utf8,/
+    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="143" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/deadbeef\/assets\/view-in-dashboard-badge\.svg"><\/a>/
   );
-  assert.match(comment, /View%20in%20Dashboard/);
-  assert.match(comment, /https%3A%2F%2Fasymptotelabs\.ai%2Flogo\.png/);
 });
 
 test('capitalizes the first character of the displayed title and uses HTML header markup', () => {
@@ -150,7 +156,7 @@ test('submits a single review summary and preserves multiline review comments', 
   assert.equal(createReviewCalls.length, 1);
   assert.equal(
     createReviewCalls[0].body,
-    'Asymptote security scan has reviewed your changes and found 1 potential vulnerabilities.'
+    'Asymptote security scan has reviewed your changes and found 1 potential vulnerability.'
   );
   const reviewComments = createReviewCalls[0]
     .comments as Array<Record<string, unknown>>;

@@ -31903,7 +31903,8 @@ const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const severity_1 = __nccwpck_require__(5278);
 function buildReviewSummary(commentCount) {
-    return `Asymptote security scan has reviewed your changes and found ${commentCount} potential vulnerabilities.`;
+    const label = commentCount === 1 ? 'vulnerability' : 'vulnerabilities';
+    return `Asymptote security scan has reviewed your changes and found ${commentCount} potential ${label}.`;
 }
 /**
  * Post violation comments as a PR review
@@ -32089,15 +32090,9 @@ function buildCursorDeeplinkHtml(violation) {
 }
 function buildDashboardDeeplinkHtml(violation) {
     const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-    const badgeSvg = [
-        '<svg xmlns="http://www.w3.org/2000/svg" width="143" height="28" viewBox="0 0 143 28" role="img" aria-label="View in Dashboard">',
-        '<rect width="143" height="28" rx="6" fill="#111827"/>',
-        '<rect x="0.5" y="0.5" width="142" height="27" rx="5.5" fill="none" stroke="#374151"/>',
-        '<image href="https://asymptotelabs.ai/logo.png" x="10" y="6" width="16" height="16" preserveAspectRatio="xMidYMid meet"/>',
-        '<text x="33" y="18" fill="#F9FAFB" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="600">View in Dashboard</text>',
-        '</svg>',
-    ].join('');
-    const badgeUrl = escapeHtmlAttr(`data:image/svg+xml;utf8,${encodeURIComponent(badgeSvg)}`);
+    const { owner, repo } = github.context.repo;
+    const ref = github.context.sha || 'main';
+    const badgeUrl = escapeHtmlAttr(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/assets/view-in-dashboard-badge.svg`);
     return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
 }
 /**
