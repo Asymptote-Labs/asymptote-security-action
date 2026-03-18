@@ -31897,6 +31897,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.postViolationComments = postViolationComments;
+exports.formatViolationComment = formatViolationComment;
 exports.resolveOutdatedThreads = resolveOutdatedThreads;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
@@ -32079,7 +32080,7 @@ function buildCursorDeeplinkHtml(violation) {
 }
 function buildDashboardDeeplinkHtml(violation) {
     const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="View in dashboard" width="115" height="28"></a>`;
+    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="16" height="16" align="absmiddle"> View in dashboard</a>`;
 }
 /**
  * Format a violation as a markdown comment
@@ -32087,24 +32088,15 @@ function buildDashboardDeeplinkHtml(violation) {
 function formatViolationComment(violation) {
     const lines = [];
     // Header with logo and title
-    const title = violation.title || violation.message;
-    lines.push(`### <img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20"> Asymptote Security Scan — ${title}`);
+    const title = capitalizeFirstCharacter(violation.title || violation.message);
+    lines.push(`<h3><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20" align="absmiddle"> Asymptote Security Scan — ${escapeHtml(title)}</h3>`);
     lines.push('');
-    // Severity badge on its own line
-    lines.push(`${(0, severity_1.getSeverityBadge)(violation.severity)} Severity`);
+    // Severity + policy metadata
+    const severityLabel = capitalizeFirstCharacter(violation.severity);
+    lines.push(`${(0, severity_1.getSeverityIcon)(violation.severity)} ${severityLabel} / **Policy:** ${violation.policy_name}`);
     lines.push('');
-    // Message + explanation merged into one paragraph
-    // When title is absent, message is already shown in the header — only show explanation
-    let body;
-    if (violation.title) {
-        body = violation.message;
-        if (violation.explanation) {
-            body += ` ${violation.explanation}`;
-        }
-    }
-    else {
-        body = violation.explanation || '';
-    }
+    // Explanation only
+    const body = formatExplanation(violation.explanation || '');
     if (body) {
         lines.push(body);
     }
@@ -32122,8 +32114,6 @@ function formatViolationComment(violation) {
     }
     lines.push(`<p>${buttons.join('&nbsp;&nbsp;')}</p>`);
     lines.push('');
-    // Policy at bottom
-    lines.push(`**Policy:** ${violation.policy_name}`);
     // Embed violation ID for webhook handler to link comment back to violation
     if (violation.id) {
         lines.push('');
@@ -32161,6 +32151,26 @@ function formatFallbackComment(violations) {
         lines.push('');
     }
     return lines.join('\n');
+}
+function capitalizeFirstCharacter(value) {
+    if (!value) {
+        return value;
+    }
+    return value.replace(/^(\s*)(\S)/, (_, leadingWhitespace, firstChar) => `${leadingWhitespace}${firstChar.toUpperCase()}`);
+}
+function formatExplanation(explanation) {
+    if (!explanation) {
+        return '';
+    }
+    return explanation.replace(/`([^`\n]+)`/g, (_match, code) => {
+        return `<code>${escapeHtml(code)}</code>`;
+    });
+}
+function escapeHtml(value) {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 /**
  * Resolve outdated Asymptote review threads on a PR.
@@ -32729,6 +32739,7 @@ function filterDiff(diff, excludePatterns) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.countBySeverity = countBySeverity;
 exports.getSeverityBadge = getSeverityBadge;
+exports.getSeverityIcon = getSeverityIcon;
 /**
  * Count violations by severity
  */
@@ -32759,6 +32770,19 @@ function getSeverityBadge(severity) {
         info: 'ℹ️ Info',
     };
     return badges[severity] || severity;
+}
+/**
+ * Get severity icon for display when the label is rendered separately.
+ */
+function getSeverityIcon(severity) {
+    const icons = {
+        critical: '🔴',
+        high: '🟠',
+        medium: '🟡',
+        low: '🔵',
+        info: 'ℹ️',
+    };
+    return icons[severity] || severity;
 }
 
 
