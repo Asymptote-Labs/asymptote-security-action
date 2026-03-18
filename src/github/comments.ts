@@ -194,6 +194,8 @@ function buildSuggestionBlock(suggestedFix: string): string {
 
 const CURSOR_URL_MAX = 7500;
 const CURSOR_REDIRECT_PREFIX = 'https://asymptotelabs.ai/open/cursor?text=';
+const DASHBOARD_BADGE_URL =
+  'https://raw.githubusercontent.com/Asymptote-Labs/asymptote-security-action/main/assets/view-in-dashboard-badge.svg';
 
 /**
  * Build Cursor redirect URL for fixing a violation.
@@ -245,11 +247,7 @@ function buildCursorDeeplinkHtml(violation: Violation): string {
 
 function buildDashboardDeeplinkHtml(violation: Violation): string {
   const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-  const { owner, repo } = github.context.repo;
-  const ref = github.context.sha || 'main';
-  const badgeUrl = escapeHtmlAttr(
-    `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/assets/view-in-dashboard-badge.svg`
-  );
+  const badgeUrl = escapeHtmlAttr(DASHBOARD_BADGE_URL);
 
   return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
 }

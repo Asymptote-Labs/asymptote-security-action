@@ -28,15 +28,7 @@ function createViolation(overrides: Partial<Violation> = {}): Violation {
 }
 
 test('formats severity line, explanation, and dashboard button as requested', () => {
-  const originalRepository = process.env.GITHUB_REPOSITORY;
-  const originalSha = github.context.sha;
-  process.env.GITHUB_REPOSITORY = 'Asymptote-Labs/asymptote-security-action';
-  github.context.sha = 'deadbeef';
-
   const comment = formatViolationComment(createViolation());
-
-  process.env.GITHUB_REPOSITORY = originalRepository;
-  github.context.sha = originalSha;
 
   assert.match(
     comment,
@@ -56,7 +48,7 @@ test('formats severity line, explanation, and dashboard button as requested', ()
   );
   assert.match(
     comment,
-    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="143" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/deadbeef\/assets\/view-in-dashboard-badge\.svg"><\/a>/
+    /<a href="https:\/\/asymptotelabs\.ai\/dashboard\/vulnerabilities\/violation-123"[^>]*><img alt="View in Dashboard" width="143" height="28" src="https:\/\/raw\.githubusercontent\.com\/Asymptote-Labs\/asymptote-security-action\/main\/assets\/view-in-dashboard-badge\.svg"><\/a>/
   );
 });
 
