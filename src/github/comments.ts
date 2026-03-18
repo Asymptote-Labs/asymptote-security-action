@@ -14,6 +14,10 @@ interface ReviewComment {
   body: string;
 }
 
+function buildReviewSummary(commentCount: number): string {
+  return `Asymptote security scan has reviewed your changes and found ${commentCount} potential vulnerabilities.`;
+}
+
 /**
  * Post violation comments as a PR review
  */
@@ -89,6 +93,7 @@ export async function postViolationComments(
         pull_number: prNumber,
         commit_id: commitSha,
         event: 'COMMENT',
+        body: buildReviewSummary(comments.length),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         comments: comments as any,
       });
@@ -115,14 +120,23 @@ export async function postViolationComments(
               comment_id: comment.id,
               content: '+1',
             });
+          } catch (error) {
+            core.warning(
+              `Failed to add +1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+
+          try {
             await octokit.rest.reactions.createForPullRequestReviewComment({
               owner,
               repo,
               comment_id: comment.id,
               content: '-1',
             });
-          } catch {
-            // Best-effort: don't fail if reactions fail for a single comment
+          } catch (error) {
+            core.warning(
+              `Failed to add -1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`
+            );
           }
         }
 
@@ -230,7 +244,17 @@ function buildCursorDeeplinkHtml(violation: Violation): string {
 
 function buildDashboardDeeplinkHtml(violation: Violation): string {
   const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="16" height="16" align="absmiddle"> View in dashboard</a>`;
+  const badgeSvg = [
+    '<svg xmlns="http://www.w3.org/2000/svg" width="143" height="28" viewBox="0 0 143 28" role="img" aria-label="View in Dashboard">',
+    '<rect width="143" height="28" rx="6" fill="#111827"/>',
+    '<rect x="0.5" y="0.5" width="142" height="27" rx="5.5" fill="none" stroke="#374151"/>',
+    '<image href="https://asymptotelabs.ai/logo.png" x="10" y="6" width="16" height="16" preserveAspectRatio="xMidYMid meet"/>',
+    '<text x="33" y="18" fill="#F9FAFB" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" font-weight="600">View in Dashboard</text>',
+    '</svg>',
+  ].join('');
+  const badgeUrl = escapeHtmlAttr(`data:image/svg+xml;utf8,${encodeURIComponent(badgeSvg)}`);
+
+  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
 }
 
 /**
@@ -245,7 +269,7 @@ export function formatViolationComment(violation: Violation): string {
   lines.push('');
 
   // Severity + policy metadata
-  const severityLabel = capitalizeFirstCharacter(violation.severity);
+  const severityLabel = `${capitalizeFirstCharacter(violation.severity)} Severity`;
   lines.push(`${getSeverityIcon(violation.severity)} ${severityLabel} / **Policy:** ${violation.policy_name}`);
   lines.push('');
 
