@@ -14,6 +14,11 @@ interface ReviewComment {
   body: string;
 }
 
+function buildReviewSummary(commentCount: number): string {
+  const label = commentCount === 1 ? 'vulnerability' : 'vulnerabilities';
+  return `Asymptote security scan has reviewed your changes and found ${commentCount} potential ${label}.`;
+}
+
 /**
  * Post violation comments as a PR review
  */
@@ -89,6 +94,7 @@ export async function postViolationComments(
         pull_number: prNumber,
         commit_id: commitSha,
         event: 'COMMENT',
+        body: buildReviewSummary(comments.length),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         comments: comments as any,
       });
@@ -115,14 +121,23 @@ export async function postViolationComments(
               comment_id: comment.id,
               content: '+1',
             });
+          } catch (error) {
+            core.warning(
+              `Failed to add +1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+
+          try {
             await octokit.rest.reactions.createForPullRequestReviewComment({
               owner,
               repo,
               comment_id: comment.id,
               content: '-1',
             });
-          } catch {
-            // Best-effort: don't fail if reactions fail for a single comment
+          } catch (error) {
+            core.warning(
+              `Failed to add -1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`
+            );
           }
         }
 
@@ -179,6 +194,8 @@ function buildSuggestionBlock(suggestedFix: string): string {
 
 const CURSOR_URL_MAX = 7500;
 const CURSOR_REDIRECT_PREFIX = 'https://asymptotelabs.ai/open/cursor?text=';
+const DASHBOARD_BADGE_URL =
+  'https://raw.githubusercontent.com/Asymptote-Labs/asymptote-security-action/main/assets/view-in-dashboard-badge.svg';
 
 /**
  * Build Cursor redirect URL for fixing a violation.
@@ -230,7 +247,9 @@ function buildCursorDeeplinkHtml(violation: Violation): string {
 
 function buildDashboardDeeplinkHtml(violation: Violation): string {
   const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="16" height="16" align="absmiddle"> View in dashboard</a>`;
+  const badgeUrl = escapeHtmlAttr(DASHBOARD_BADGE_URL);
+
+  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
 }
 
 /**
@@ -245,7 +264,7 @@ export function formatViolationComment(violation: Violation): string {
   lines.push('');
 
   // Severity + policy metadata
-  const severityLabel = capitalizeFirstCharacter(violation.severity);
+  const severityLabel = `${capitalizeFirstCharacter(violation.severity)} Severity`;
   lines.push(`${getSeverityIcon(violation.severity)} ${severityLabel} / **Policy:** ${violation.policy_name}`);
   lines.push('');
 

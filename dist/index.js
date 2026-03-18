@@ -31902,6 +31902,10 @@ exports.resolveOutdatedThreads = resolveOutdatedThreads;
 const core = __importStar(__nccwpck_require__(7484));
 const github = __importStar(__nccwpck_require__(3228));
 const severity_1 = __nccwpck_require__(5278);
+function buildReviewSummary(commentCount) {
+    const label = commentCount === 1 ? 'vulnerability' : 'vulnerabilities';
+    return `Asymptote security scan has reviewed your changes and found ${commentCount} potential ${label}.`;
+}
 /**
  * Post violation comments as a PR review
  */
@@ -31961,6 +31965,7 @@ async function postViolationComments(octokit, violations, commitSha) {
                 pull_number: prNumber,
                 commit_id: commitSha,
                 event: 'COMMENT',
+                body: buildReviewSummary(comments.length),
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 comments: comments,
             });
@@ -31983,6 +31988,11 @@ async function postViolationComments(octokit, violations, commitSha) {
                             comment_id: comment.id,
                             content: '+1',
                         });
+                    }
+                    catch (error) {
+                        core.warning(`Failed to add +1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                    try {
                         await octokit.rest.reactions.createForPullRequestReviewComment({
                             owner,
                             repo,
@@ -31990,8 +32000,8 @@ async function postViolationComments(octokit, violations, commitSha) {
                             content: '-1',
                         });
                     }
-                    catch {
-                        // Best-effort: don't fail if reactions fail for a single comment
+                    catch (error) {
+                        core.warning(`Failed to add -1 reaction to review comment ${comment.id}: ${error instanceof Error ? error.message : String(error)}`);
                     }
                 }
                 core.info(`Added reactions to ${reviewComments.data.length} review comments`);
@@ -32034,6 +32044,7 @@ function buildSuggestionBlock(suggestedFix) {
 }
 const CURSOR_URL_MAX = 7500;
 const CURSOR_REDIRECT_PREFIX = 'https://asymptotelabs.ai/open/cursor?text=';
+const DASHBOARD_BADGE_URL = 'https://raw.githubusercontent.com/Asymptote-Labs/asymptote-security-action/main/assets/view-in-dashboard-badge.svg';
 /**
  * Build Cursor redirect URL for fixing a violation.
  * GitHub strips non-HTTPS protocols from <a href>, so we use an HTTPS
@@ -32080,7 +32091,8 @@ function buildCursorDeeplinkHtml(violation) {
 }
 function buildDashboardDeeplinkHtml(violation) {
     const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
-    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="16" height="16" align="absmiddle"> View in dashboard</a>`;
+    const badgeUrl = escapeHtmlAttr(DASHBOARD_BADGE_URL);
+    return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
 }
 /**
  * Format a violation as a markdown comment
@@ -32092,7 +32104,7 @@ function formatViolationComment(violation) {
     lines.push(`<h3><img src="https://asymptotelabs.ai/logo.png" alt="Asymptote" width="20" height="20" align="absmiddle"> Asymptote Security Scan — ${escapeHtml(title)}</h3>`);
     lines.push('');
     // Severity + policy metadata
-    const severityLabel = capitalizeFirstCharacter(violation.severity);
+    const severityLabel = `${capitalizeFirstCharacter(violation.severity)} Severity`;
     lines.push(`${(0, severity_1.getSeverityIcon)(violation.severity)} ${severityLabel} / **Policy:** ${violation.policy_name}`);
     lines.push('');
     // Explanation only
