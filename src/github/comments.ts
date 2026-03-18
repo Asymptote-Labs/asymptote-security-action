@@ -249,7 +249,7 @@ function buildDashboardDeeplinkHtml(violation: Violation): string {
   const dashboardUrl = escapeHtmlAttr(`https://asymptotelabs.ai/dashboard/vulnerabilities/violation-${violation.id}`);
   const badgeUrl = escapeHtmlAttr(DASHBOARD_BADGE_URL);
 
-  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="143" height="28" src="${badgeUrl}"></a>`;
+  return `<a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer"><img alt="View in Dashboard" width="157" height="28" src="${badgeUrl}"></a>`;
 }
 
 /**
