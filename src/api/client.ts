@@ -17,6 +17,12 @@ interface ClientOptions {
   baseUrl: string;
 }
 
+export interface RepositoryIntegrationModeResponse {
+  repository_id: string | null;
+  found: boolean;
+  integration_mode: 'legacy_action' | 'github_app';
+}
+
 export class AsymptoteClient {
   private apiKey: string;
   private baseUrl: string;
@@ -144,6 +150,17 @@ export class AsymptoteClient {
       );
       return [];
     }
+  }
+
+  async getRepositoryIntegrationMode(
+    owner: string,
+    name: string
+  ): Promise<RepositoryIntegrationModeResponse> {
+    const params = new URLSearchParams({ owner, name });
+    return this.request<RepositoryIntegrationModeResponse>(
+      'GET',
+      `/api/repository-integration-mode?${params.toString()}`
+    );
   }
 
   private sleep(ms: number): Promise<void> {

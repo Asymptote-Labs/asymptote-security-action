@@ -16,6 +16,11 @@ async function run(): Promise<void> {
     core.info('Asymptote Security Scan starting...');
     core.debug(`API URL: ${config.apiUrl}`);
 
+    const client = new AsymptoteClient({
+      apiKey: config.apiKey,
+      baseUrl: config.apiUrl,
+    });
+
     // 2. Verify PR context
     if (github.context.eventName !== 'pull_request') {
       core.setFailed(
@@ -33,6 +38,28 @@ async function run(): Promise<void> {
       return;
     }
     const octokit = github.getOctokit(githubToken);
+
+    try {
+      const integration = await client.getRepositoryIntegrationMode(
+        github.context.repo.owner,
+        github.context.repo.repo
+      );
+      if (integration.integration_mode === 'github_app') {
+        core.info(
+          'Repository is configured for GitHub App PR reviews; exiting legacy action without posting comments or checks.'
+        );
+        core.setOutput('decision', 'allow');
+        core.setOutput('total_violations', 0);
+        core.setOutput('critical_count', 0);
+        core.setOutput('high_count', 0);
+        core.setOutput('medium_count', 0);
+        return;
+      }
+    } catch (error) {
+      core.warning(
+        `Failed to look up repository integration mode; continuing with legacy action path. ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
 
     // 4. Get PR diff (incremental on synchronize, full otherwise)
     const action = github.context.payload.action;
@@ -140,10 +167,6 @@ async function run(): Promise<void> {
 
     // 5. Call Asymptote API
     core.info('Submitting diff for evaluation...');
-    const client = new AsymptoteClient({
-      apiKey: config.apiKey,
-      baseUrl: config.apiUrl,
-    });
 
     let result;
     try {
