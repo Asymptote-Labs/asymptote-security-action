@@ -1,7 +1,12 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { getConfig } from './config';
-import { AsymptoteClient, RateLimitError, TimeoutError } from './api/client';
+import {
+  AsymptoteClient,
+  RateLimitError,
+  shouldSkipLegacyActionForIntegration,
+  TimeoutError,
+} from './api/client';
 import { getPRDiff, getIncrementalDiff } from './github/diff';
 import { postViolationComments, resolveOutdatedThreads } from './github/comments';
 import { createCheckRun } from './github/checks';
@@ -44,7 +49,7 @@ async function run(): Promise<void> {
         github.context.repo.owner,
         github.context.repo.repo
       );
-      if (integration.integration_mode === 'github_app') {
+      if (shouldSkipLegacyActionForIntegration(integration)) {
         core.info(
           'Repository is configured for GitHub App PR reviews; exiting legacy action without posting comments or checks.'
         );

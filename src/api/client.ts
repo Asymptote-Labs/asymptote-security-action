@@ -23,6 +23,12 @@ export interface RepositoryIntegrationModeResponse {
   integration_mode: 'legacy_action' | 'github_app';
 }
 
+export function shouldSkipLegacyActionForIntegration(
+  integration: RepositoryIntegrationModeResponse
+): boolean {
+  return integration.found && integration.integration_mode === 'github_app';
+}
+
 export class AsymptoteClient {
   private apiKey: string;
   private baseUrl: string;
