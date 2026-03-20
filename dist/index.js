@@ -31453,12 +31453,16 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.TimeoutError = exports.RateLimitError = exports.AsymptoteClient = void 0;
+exports.shouldSkipLegacyActionForIntegration = shouldSkipLegacyActionForIntegration;
 const core = __importStar(__nccwpck_require__(7484));
 const INITIAL_DELAY_MS = 1000;
 const BACKOFF_MULTIPLIER = 1.5;
 const MAX_DELAY_MS = 10000;
 const MAX_ATTEMPTS = 150;
 const TIMEOUT_MS = 1200000;
+function shouldSkipLegacyActionForIntegration(integration) {
+    return integration.found && integration.integration_mode === 'github_app';
+}
 class AsymptoteClient {
     apiKey;
     baseUrl;
@@ -31534,6 +31538,10 @@ class AsymptoteClient {
             core.warning(`Failed to generate suggested fixes: ${error instanceof Error ? error.message : String(error)}`);
             return [];
         }
+    }
+    async getRepositoryIntegrationMode(owner, name) {
+        const params = new URLSearchParams({ owner, name });
+        return this.request('GET', `/api/repository-integration-mode?${params.toString()}`);
     }
     sleep(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
@@ -32483,6 +32491,10 @@ async function run() {
         core.setSecret(config.apiKey);
         core.info('Asymptote Security Scan starting...');
         core.debug(`API URL: ${config.apiUrl}`);
+        const client = new client_1.AsymptoteClient({
+            apiKey: config.apiKey,
+            baseUrl: config.apiUrl,
+        });
         // 2. Verify PR context
         if (github.context.eventName !== 'pull_request') {
             core.setFailed(`This action only runs on pull_request events. Current event: ${github.context.eventName}`);
@@ -32495,6 +32507,21 @@ async function run() {
             return;
         }
         const octokit = github.getOctokit(githubToken);
+        try {
+            const integration = await client.getRepositoryIntegrationMode(github.context.repo.owner, github.context.repo.repo);
+            if ((0, client_1.shouldSkipLegacyActionForIntegration)(integration)) {
+                core.info('Repository is configured for GitHub App PR reviews; exiting legacy action without posting comments or checks.');
+                core.setOutput('decision', 'allow');
+                core.setOutput('total_violations', 0);
+                core.setOutput('critical_count', 0);
+                core.setOutput('high_count', 0);
+                core.setOutput('medium_count', 0);
+                return;
+            }
+        }
+        catch (error) {
+            core.warning(`Failed to look up repository integration mode; continuing with legacy action path. ${error instanceof Error ? error.message : String(error)}`);
+        }
         // 4. Get PR diff (incremental on synchronize, full otherwise)
         const action = github.context.payload.action;
         const before = github.context.payload.before;
@@ -32582,10 +32609,6 @@ async function run() {
         core.setSecret(prAuthor);
         // 5. Call Asymptote API
         core.info('Submitting diff for evaluation...');
-        const client = new client_1.AsymptoteClient({
-            apiKey: config.apiKey,
-            baseUrl: config.apiUrl,
-        });
         let result;
         try {
             result = await client.evaluateWithPolling({
