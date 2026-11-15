@@ -32321,13 +32321,13 @@ async function getPRDiff(octokit, excludePaths = []) {
     // The response data is the raw diff string when using diff format
     let diff = diffResponse.data;
     // Fetch file list for metadata
-    const filesResponse = await octokit.rest.pulls.listFiles({
+    const filesResponse = await octokit.paginate(octokit.rest.pulls.listFiles, {
         owner,
         repo,
         pull_number: prNumber,
         per_page: 100,
     });
-    let files = filesResponse.data.map((file) => ({
+    let files = filesResponse.map((file) => ({
         path: file.filename,
         language: getLanguageFromFilename(file.filename),
     }));
