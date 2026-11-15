@@ -47,14 +47,17 @@ export async function getPRDiff(
   let diff = diffResponse.data as unknown as string;
 
   // Fetch file list for metadata
-  const filesResponse = await octokit.rest.pulls.listFiles({
-    owner,
-    repo,
-    pull_number: prNumber,
-    per_page: 100,
-  });
+  const filesResponse = await octokit.paginate(
+    octokit.rest.pulls.listFiles,
+    {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }
+  );
 
-  let files: FileInfo[] = filesResponse.data.map((file: { filename: string }) => ({
+  let files: FileInfo[] = filesResponse.map((file: { filename: string }) => ({
     path: file.filename,
     language: getLanguageFromFilename(file.filename),
   }));
